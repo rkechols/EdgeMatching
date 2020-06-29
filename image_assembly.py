@@ -129,11 +129,10 @@ def assemble_image(patches: list, construction_matrix: np.ndarray) -> np.ndarray
 
 
 if __name__ == "__main__":
-	original_image = load_image_from_disk("path/to/image.png")
+	original_image = load_image_from_disk("TestImages/Strange.png")
 	show_image(original_image)
 	patch_list = scramble_image(original_image, 28)
 	adjacency_matrix = build_graph(patch_list)
 	reconstruction_matrix = jigsaw_kruskals(adjacency_matrix)
 	reconstructed_image = assemble_image(patch_list, reconstruction_matrix)
 	show_image(reconstructed_image)
-	pass
