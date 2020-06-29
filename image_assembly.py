@@ -1,8 +1,11 @@
+import copy
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import random
 
+
+INFTY = float("inf")
 
 # enum-like values to indicate how far the patch has been rotated counter clockwise
 ROTATION_0 = 0
@@ -105,6 +108,49 @@ def build_graph(patches: list) -> np.ndarray:
 	pass
 
 
+def combine_blocks(first_block: np.ndarray, second_block: np.ndarray, a: int, b: int, r: int) -> np.ndarray:
+	# get the rotation values of each block
+	r1, r2 = rotations_from_combination_index(r)
+	first_block = np.rot90(first_block, (4 - r1) % 4)
+	first_block[:, :, 1] = (first_block[:, :, 1] - r1) % 4
+	second_block = np.rot90(second_block, (4 - r2) % 4)
+	second_block[:, :, 1] = (second_block[:, :, 1] - r2) % 4
+	# check that the two values are indeed in their blocks, and where
+	a_locs = np.where(first_block[:, :, 0] == a)
+	a_locs = list(zip(a_locs[0], a_locs[1]))
+	if len(a_locs) != 1:
+		raise RuntimeError("'a' could not be found (or was found multiple times) in the first block when combining blocks")
+	a_loc = a_locs[0]
+	b_locs = np.where(second_block[:, :, 0] == b)
+	b_locs = list(zip(b_locs[0], b_locs[1]))
+	if len(b_locs) != 1:
+		raise RuntimeError("'b' could not be found (or was found multiple times) in the second block when combining blocks")
+	b_loc = b_locs[0]
+	# figure out how wide and tall the combined piece is going to be, and what the shift is
+	height = max(a_loc[0] + (second_block.shape[0] - b_loc[0]), first_block.shape[0], second_block.shape[0])
+	width = max(a_loc[1] + (second_block.shape[1] - b_loc[1]) + 1, first_block.shape[1], second_block.shape[1])
+	row_shift = a_loc[0] - b_loc[0]
+	col_shift = (a_loc[1] - b_loc[1]) + 1
+	# combine the blocks, if we can
+	combined_block = np.empty((height, width, 2), dtype=first_block.dtype)
+	combined_block[:, :, :] = -1
+	combined_block[:first_block.shape[0], :first_block.shape[1], :] = first_block
+	for row in range(second_block.shape[0]):
+		for col in range(second_block.shape[1]):
+			if second_block[row, col, 0] == -1:
+				continue
+			row_combined = row + row_shift
+			col_combined = col + col_shift
+			try:
+				if combined_block[row_combined, col_combined, 0] == -1:
+					combined_block[row_combined, col_combined] = second_block[row, col]
+				else:  # found a conflict
+					return None
+			except IndexError:
+				continue
+	return combined_block
+
+
 def jigsaw_kruskals(graph: np.ndarray) -> np.ndarray:
 	"""
 	takes an adjacency matrix and uses kruskal's algorithm to build a reconstruction matrix
@@ -112,8 +158,56 @@ def jigsaw_kruskals(graph: np.ndarray) -> np.ndarray:
 	:return: a numpy array of shape (r, c, 2). the value at [i, j, 0] gives the index of the patch that should be located
 	in that slot, and [i, j, 1] gives the rotation index of that patch
 	"""
-	# TODO
-	pass
+	graph = copy.copy(graph)
+	n = graph.shape[0]
+	assert graph.shape[1] == n
+	for x in range(n):
+		graph[x, x] = INFTY
+	sections = list()
+	for i in range(n):
+		sections.append(({i}, np.array([[[i, 0]]])))
+	# join chunks until we only have one chunk
+	while len(sections) > 1:
+		# find the edge of minimum weight
+		min_edges = np.where(graph == np.amin(graph))
+		min_edges = list(zip(min_edges[0], min_edges[1], min_edges[2]))
+		for a, b, r in min_edges:
+			# find the two blocks
+			first_block_index = -1
+			second_block_index = -1
+			for i, (s, _) in enumerate(sections):
+				if a in s:
+					first_block_index = i
+					if second_block_index != -1:
+						break
+				if b in s:
+					second_block_index = i
+					if first_block_index != -1:
+						break
+			if first_block_index == -1:
+				raise RuntimeError("error combining sets! ('a' was not found)")
+			if second_block_index == -1:
+				raise RuntimeError("error combining sets! ('b' was not found)")
+			first_set, first_block = sections[first_block_index]
+			second_set, second_block = sections[second_block_index]
+			# combine the two blocks, if we can
+			combined_block = combine_blocks(first_block, second_block, a, b, r)
+			if combined_block is None:
+				graph[a, b, r] = INFTY
+				continue
+			# adjust our data for next iteration
+			if second_block_index < first_block_index:
+				first_block_index, second_block_index = second_block_index, first_block_index
+			del sections[second_block_index]
+			if len(sections) != 1:  # we can save ourselves the time of blocking out values if we're already done
+				for i in first_set:
+					for j in second_set:
+						graph[i, j] = INFTY
+						graph[j, i] = INFTY
+			combined_set = first_set | second_set
+			sections[first_block_index] = (combined_set, combined_block)
+			break
+	return sections[0][1]
 
 
 def assemble_image(patches: list, construction_matrix: np.ndarray) -> np.ndarray:
