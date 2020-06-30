@@ -5,7 +5,7 @@ import numpy as np
 import random
 
 
-INFTY = float("inf")
+INFINITY = float("inf")
 
 # enum-like values to indicate how far the patch has been rotated counter clockwise
 ROTATION_0 = 0
@@ -162,7 +162,7 @@ def jigsaw_kruskals(graph: np.ndarray) -> np.ndarray:
 	n = graph.shape[0]
 	assert graph.shape[1] == n
 	for x in range(n):
-		graph[x, x] = INFTY
+		graph[x, x] = INFINITY
 	sections = list()
 	for i in range(n):
 		sections.append(({i}, np.array([[[i, 0]]])))
@@ -193,7 +193,7 @@ def jigsaw_kruskals(graph: np.ndarray) -> np.ndarray:
 			# combine the two blocks, if we can
 			combined_block = combine_blocks(first_block, second_block, a, b, r)
 			if combined_block is None:
-				graph[a, b, r] = INFTY
+				graph[a, b, r] = INFINITY
 				continue
 			# adjust our data for next iteration
 			if second_block_index < first_block_index:
@@ -202,8 +202,8 @@ def jigsaw_kruskals(graph: np.ndarray) -> np.ndarray:
 			if len(sections) != 1:  # we can save ourselves the time of blocking out values if we're already done
 				for i in first_set:
 					for j in second_set:
-						graph[i, j] = INFTY
-						graph[j, i] = INFTY
+						graph[i, j] = INFINITY
+						graph[j, i] = INFINITY
 			combined_set = first_set | second_set
 			sections[first_block_index] = (combined_set, combined_block)
 			break
