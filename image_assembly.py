@@ -94,17 +94,55 @@ def scramble_image(image: np.ndarray, patch_size: int) -> list:
 	:return: a list containing the scrambled patches, each of shape (patch_size, patch_size, 3)
 	"""
 	# TODO
-	pass
+	# get the image (we actually have it: np.ndarray)
+	# Break image into patches
+	vertical_patches = image.shape[0] // patch_size
+	horizontal_patches = image.shape[1] // patch_size
+
+	patched_array = list()
+
+	for i in range(vertical_patches):
+		# starting pixel
+		vert_pixel_location = patch_size * i
+		for j in range(horizontal_patches):
+			# starting pixel
+			hor_pix_location = patch_size * j
+			patch = image[vert_pixel_location:vert_pixel_location+patch_size, hor_pix_location:hor_pix_location+patch_size, :]
+			patched_array.append(patch)
+
+	# Scramble the patches (AKA put them in a random order)
+	random.shuffle(patched_array)
+	# for i in range(patched_array):
+	# Pick a random index between 0 and i, swap what is in spot 0 and spot i, do this a couple times
+	# Also give them a random rotation!
+	rotated_patched_array = list()
+	for patch in patched_array:
+		rotated_patched_array.append(np.rot90(patch, random.randrange(4)))
+	return rotated_patched_array
+
+def dissimilarity_score(patch1: np.ndarray, patch2: np.ndarray, combination_index: int) -> int:
+	combined = combine_patches(patch1, patch2, combination_index)
+	# Get a score
+	# Return the score
+	# TODO: fix this!!!
+	for
+	score =
+	return score
 
 
 def build_graph(patches: list) -> np.ndarray:
 	"""
-	takes a list of scrambled patches and creates an adjacency matrix that gives
+	takes a list of scrambled patches and creates an adjacency matrix that gives dissimilarity scores
 	:param patches: list of square numpy arrays, each of the same shape (x, x, 3), length n
 	:return: a numpy array of shape (n, n, 16). the value at [i, j, c] indicates how dissimilar patch i and patch j are
 	along their shared edge when using combination index c
 	"""
 	# TODO
+	n = len(patches)
+	# making an empty array with the following type and that is (n, n, 16) big
+	dissimilarity_scores = np.empty((n, n, 16), dtype=int)
+	# Call dissimilarity_score function and put that number into the matrix (dissimilarity_scores), return matrix
+
 	pass
 
 
@@ -225,7 +263,9 @@ def assemble_image(patches: list, construction_matrix: np.ndarray) -> np.ndarray
 if __name__ == "__main__":
 	original_image = load_image_from_disk("TestImages/Strange.png")
 	show_image(original_image)
-	patch_list = scramble_image(original_image, 28)
+	patch_list = scramble_image(original_image, 75)
+	for p in patch_list:
+		show_image(p)
 	adjacency_matrix = build_graph(patch_list)
 	reconstruction_matrix = jigsaw_kruskals(adjacency_matrix)
 	reconstructed_image = assemble_image(patch_list, reconstruction_matrix)
