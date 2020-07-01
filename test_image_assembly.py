@@ -3,7 +3,7 @@ from unittest import TestCase
 import numpy as np
 import matplotlib.pyplot as plt
 import random
-from image_assembly import jigsaw_kruskals, load_image_from_disk, scramble_image, show_patches
+from image_assembly import build_graph, combination_index_from_rotations, combine_patches, jigsaw_kruskals, load_image_from_disk, scramble_image, show_image, show_patches
 
 
 def verify_reconstruction_matrix(matrix: np.ndarray, n: int) -> bool:
@@ -27,6 +27,15 @@ def verify_reconstruction_matrix(matrix: np.ndarray, n: int) -> bool:
 	return passes
 
 
+def get_test_patches() -> list:
+	all_test_patches = load_image_from_disk("TestImages/TestPatches.png")
+	patch1 = all_test_patches[:32, :32, :]
+	patch2 = all_test_patches[:32, 32:, :]
+	patch3 = all_test_patches[32:, :32, :]
+	patch4 = all_test_patches[32:, 32:, :]
+	return [patch1, patch2, patch3, patch4]
+
+
 file_name = "TestImages/Thanos.png"
 image_shape = (451, 650, 3)
 
@@ -43,8 +52,7 @@ class KruskalsTest(TestCase):
 				time_start = time.time()
 				reconstruction_matrix = jigsaw_kruskals(test_graph)
 				times.append(time.time() - time_start)
-				if not verify_reconstruction_matrix(reconstruction_matrix, n):
-					self.fail()
+				self.assertTrue(verify_reconstruction_matrix(reconstruction_matrix, n), "reconstruction matrix is invalid")
 			average = sum(times) / len(times)
 			averages.append(average)
 			space = "\t"
@@ -56,18 +64,29 @@ class KruskalsTest(TestCase):
 
 	def test_load_image_from_disk(self):
 		image = load_image_from_disk(file_name)
-		if len(image.shape) != 3:
-			self.fail()
-		if image.shape != image_shape:
-			self.fail()
+		self.assertEqual(len(image.shape), 3, "loaded image is the wrong number of dimensions")
+		self.assertTupleEqual(image.shape, image_shape, "loaded image is the wrong shape")
+		show_image(image)
 
 	def test_scramble_image(self):
 		image = load_image_from_disk(file_name)
 		patch_size = 100
-		patches = scramble_image(image, patch_size)
-		patch_row_count = image_shape[0] // patch_size
-		patch_col_count = image_shape[1] // patch_size
-		n = patch_row_count * patch_col_count
-		if len(patches) != n:
-			self.fail()
-		show_patches(patches, patch_col_count)
+		for trial in range(3):
+			patches = scramble_image(image, patch_size)
+			patch_row_count = image_shape[0] // patch_size
+			patch_col_count = image_shape[1] // patch_size
+			n = patch_row_count * patch_col_count
+			self.assertEqual(len(patches), n, "wrong number of patches")
+			show_patches(patches, patch_col_count)
+
+	def test_build_graph(self):
+		test_patches = get_test_patches()
+		show_patches(test_patches, 2)
+		matrix = build_graph(test_patches)
+		self.assertTupleEqual(matrix.shape, (4, 4, 16), "matrix wrong shape")
+		# show_image(combine_patches(test_patches[0], test_patches[1], 0))
+		self.assertGreater(matrix[0, 1, 0], matrix[0, 1, 2], "black with rotated red should score better than black with just red")
+		self.assertGreater(matrix[0, 1, 2], matrix[0, 1, 10], "rotated black with rotated red should score better than just black with rotated red")
+		self.assertEqual(matrix[0, 1, 2], matrix[1, 0, 2], "black with red should get the same score regardless of which is listed first")
+		self.assertLess(matrix[2, 3, 7], matrix[1, 3, 11], "similar shades should have a better score then blatantly different colors")
+		self.assertEqual(0, matrix[2, 3, 13], "identical edges should give a score of 0")
