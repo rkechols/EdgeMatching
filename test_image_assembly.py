@@ -3,7 +3,8 @@ from unittest import TestCase
 import numpy as np
 import matplotlib.pyplot as plt
 import random
-from image_assembly import build_graph, combination_index_from_rotations, combine_patches, jigsaw_kruskals, load_image_from_disk, scramble_image, show_image, show_patches
+from image_assembly import assemble_image, build_graph, combination_index_from_rotations, combine_patches, jigsaw_kruskals, load_image_from_disk, scramble_image, show_image, \
+	assemble_patches
 
 
 def verify_reconstruction_matrix(matrix: np.ndarray, n: int) -> bool:
@@ -77,11 +78,11 @@ class KruskalsTest(TestCase):
 			patch_col_count = image_shape[1] // patch_size
 			n = patch_row_count * patch_col_count
 			self.assertEqual(len(patches), n, "wrong number of patches")
-			show_patches(patches, patch_col_count)
+			show_image(assemble_patches(patches, patch_col_count))
 
 	def test_build_graph(self):
 		test_patches = get_test_patches()
-		show_patches(test_patches, 2)
+		show_image(assemble_patches(test_patches, 2))
 		matrix = build_graph(test_patches)
 		self.assertTupleEqual(matrix.shape, (4, 4, 16), "matrix wrong shape")
 		# show_image(combine_patches(test_patches[0], test_patches[1], 0))
@@ -90,3 +91,17 @@ class KruskalsTest(TestCase):
 		self.assertEqual(matrix[0, 1, 2], matrix[1, 0, 2], "black with red should get the same score regardless of which is listed first")
 		self.assertLess(matrix[2, 3, 7], matrix[1, 3, 11], "similar shades should have a better score then blatantly different colors")
 		self.assertEqual(0, matrix[2, 3, 13], "identical edges should give a score of 0")
+
+	def test_assemble_image(self):
+		original = load_image_from_disk("TestImages/TestPatches.png")
+		test_patches = get_test_patches()
+		# cycle black, red, and dark blue clockwise
+		# rotate black by 180, rotate red by 90
+		test_patches_shuffled = [test_patches[2], np.rot90(test_patches[0], 2), np.rot90(test_patches[1], 1), test_patches[3]]
+		# make the reconstruction matrix
+		reconstruction = np.array([[[1, 2], [2, 3]], [[0, 0], [3, 0]]])
+		actual = assemble_image(test_patches_shuffled, reconstruction)
+		show_image(original)
+		show_image(assemble_patches(test_patches_shuffled, 2))
+		show_image(actual)
+		self.assertTrue(np.array_equal(original, actual), "reconstructed image is not the same as the original")
