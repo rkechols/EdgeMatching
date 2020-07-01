@@ -34,7 +34,7 @@ def show_image(image_rgb: np.ndarray):
 	plt.show()
 
 
-def show_patches(patches: list, num_cols: int):
+def assemble_patches(patches: list, num_cols: int) -> np.ndarray:
 	n = len(patches)
 	if n == 0:
 		print("no patches to show")
@@ -44,15 +44,14 @@ def show_patches(patches: list, num_cols: int):
 	if n % num_cols != 0:
 		num_rows += 1
 	# tile the patches
-	to_show = np.zeros((num_rows * patch_size, num_cols * patch_size, 3), dtype=int)
+	assembled = np.zeros((num_rows * patch_size, num_cols * patch_size, 3), dtype=int)
 	for i, patch in enumerate(patches):
 		row = i // num_cols
 		col = i % num_cols
 		start_pixel_row = row * patch_size
 		start_pixel_col = col * patch_size
-		to_show[start_pixel_row:(start_pixel_row + patch_size), start_pixel_col:(start_pixel_col + patch_size), :] = patch
-	# show the tiled image
-	show_image(to_show)
+		assembled[start_pixel_row:(start_pixel_row + patch_size), start_pixel_col:(start_pixel_col + patch_size), :] = patch
+	return assembled
 
 
 def rotate_random(patch: np.ndarray) -> (np.ndarray, int):
