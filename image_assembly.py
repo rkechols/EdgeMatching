@@ -153,8 +153,8 @@ def dissimilarity_score(patch1: np.ndarray, patch2: np.ndarray, combination_inde
 		red1 = int(combined[n, middle_seam_index1, 0])
 		green1 = int(combined[n, middle_seam_index1, 1])
 		blue1 = int(combined[n, middle_seam_index1, 2])
-		red2 = int(combined[n, middle_seam_index2, 2])
-		green2 = int(combined[n, middle_seam_index2, 2])
+		red2 = int(combined[n, middle_seam_index2, 0])
+		green2 = int(combined[n, middle_seam_index2, 1])
 		blue2 = int(combined[n, middle_seam_index2, 2])
 
 		diff_red = abs(red1 - red2)
