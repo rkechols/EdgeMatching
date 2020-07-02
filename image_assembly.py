@@ -144,15 +144,37 @@ def dissimilarity_score(patch1: np.ndarray, patch2: np.ndarray, combination_inde
 	combined = combine_patches(patch1, patch2, combination_index)
 	# Get a score
 	# Return the score
-	# TODO: fix this!!!
 	# combined.shape[0] tells us how many rows there are
+	colors = list()
+	middle_seam_index1 = (combined.shape[1] // 2) - 1
+	middle_seam_index2 = combined.shape[1] // 2
 	for n in range(combined.shape[0]):
 		# also need to go through the columns?
-		for i in range(combined.shape[1]):
-		# we want to go through each row and compare it with the column right next to it?
-		# that is maybe what this line is saying?
-		score = # value at combined.shape[0] - value at combined.shape[1]??? is that even legal?
-		return score
+		red1 = int(combined[n, middle_seam_index1, 0])
+		green1 = int(combined[n, middle_seam_index1, 1])
+		blue1 = int(combined[n, middle_seam_index1, 2])
+		red2 = int(combined[n, middle_seam_index2, 2])
+		green2 = int(combined[n, middle_seam_index2, 2])
+		blue2 = int(combined[n, middle_seam_index2, 2])
+
+		diff_red = abs(red1 - red2)
+		diff_green = abs(green1 - green2)
+		diff_blue = abs(blue1 - blue2)
+
+		# add them all up into a list
+		colors.append(diff_red)
+		colors.append(diff_green)
+		colors.append(diff_blue)
+		# average list at the end
+	total = sum(colors)
+	# // because we want the score to be integers
+	score = total // len(colors)
+	return score
+
+
+	# we want to go through each row and compare it with the column right next to it?
+	# that is maybe what this line is saying?
+	# score = # value at combined.shape[0] - value at combined.shape[1]??? is that even legal?
 
 
 def build_graph(patches: list) -> np.ndarray:
@@ -168,10 +190,15 @@ def build_graph(patches: list) -> np.ndarray:
 	# Call dissimilarity_score function and put that number into the matrix (dissimilarity_scores), return matrix
 	# new_score = dissimilarity_score(n, n, 26)
 	# dissimilarity_scores.reshape(new_score, new_score, 16)
-	dissimilarity_scores[i, j, c] = new_score
+	# dissimilarity_scores[i, j, c] = new_score
 	# shouldn't it be new_score = dissimilarity_scores[i, j, c]???
+	# for each loop that gives you the index
+	for i, patch1 in enumerate(patches):
+		for j, patch2 in enumerate(patches):
+			for c in range(16):
+				dissimilarity_scores[i, j, c] = dissimilarity_score(patch1, patch2, c)
 
-	pass
+	return dissimilarity_scores
 
 
 def combine_blocks(first_block: np.ndarray, second_block: np.ndarray, a: int, b: int, r: int) -> Union[None, np.ndarray]:
