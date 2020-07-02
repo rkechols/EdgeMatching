@@ -113,7 +113,6 @@ def scramble_image(image: np.ndarray, patch_size: int) -> list:
 	:param patch_size: number indicating how many pixels wide and tall each patch should be
 	:return: a list containing the scrambled patches, each of shape (patch_size, patch_size, 3)
 	"""
-	# TODO
 	# get the image (we actually have it: np.ndarray)
 	# Break image into patches
 	vertical_patches = image.shape[0] // patch_size
@@ -133,21 +132,27 @@ def scramble_image(image: np.ndarray, patch_size: int) -> list:
 	# Scramble the patches (AKA put them in a random order)
 	random.shuffle(patched_array)
 	# for i in range(patched_array):
-	# Pick a random index between 0 and i, swap what is in spot 0 and spot i, do this a couple times
+	# Doing it without .shuffle command: pick a random index between 0 and i, swap what is in spot 0 and spot i, do this a couple times
 	# Also give them a random rotation!
 	rotated_patched_array = list()
 	for patch in patched_array:
 		rotated_patched_array.append(np.rot90(patch, random.randrange(4)))
 	return rotated_patched_array
 
+
 def dissimilarity_score(patch1: np.ndarray, patch2: np.ndarray, combination_index: int) -> int:
 	combined = combine_patches(patch1, patch2, combination_index)
 	# Get a score
 	# Return the score
 	# TODO: fix this!!!
-	for
-	score =
-	return score
+	# combined.shape[0] tells us how many rows there are
+	for n in range(combined.shape[0]):
+		# also need to go through the columns?
+		for i in range(combined.shape[1]):
+		# we want to go through each row and compare it with the column right next to it?
+		# that is maybe what this line is saying?
+		score = # value at combined.shape[0] - value at combined.shape[1]??? is that even legal?
+		return score
 
 
 def build_graph(patches: list) -> np.ndarray:
@@ -157,11 +162,14 @@ def build_graph(patches: list) -> np.ndarray:
 	:return: a numpy array of shape (n, n, 16). the value at [i, j, c] indicates how dissimilar patch i and patch j are
 	along their shared edge when using combination index c
 	"""
-	# TODO
 	n = len(patches)
-	# making an empty array with the following type and that is (n, n, 16) big
+	# making an empty array with the following type that is (n, n, 16) big
 	dissimilarity_scores = np.empty((n, n, 16), dtype=int)
 	# Call dissimilarity_score function and put that number into the matrix (dissimilarity_scores), return matrix
+	# new_score = dissimilarity_score(n, n, 26)
+	# dissimilarity_scores.reshape(new_score, new_score, 16)
+	dissimilarity_scores[i, j, c] = new_score
+	# shouldn't it be new_score = dissimilarity_scores[i, j, c]???
 
 	pass
 

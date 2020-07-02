@@ -37,8 +37,8 @@ def get_test_patches() -> list:
 	return [patch1, patch2, patch3, patch4]
 
 
-file_name = "TestImages/Thanos.png"
-image_shape = (451, 650, 3)
+file_name = "TestImages/theo.jpg"
+image_shape = (800, 676, 3)
 
 
 class KruskalsTest(TestCase):
