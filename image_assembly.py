@@ -141,40 +141,22 @@ def scramble_image(image: np.ndarray, patch_size: int) -> list:
 
 
 def dissimilarity_score(patch1: np.ndarray, patch2: np.ndarray, combination_index: int) -> int:
-	combined = combine_patches(patch1, patch2, combination_index)
-	# Get a score
-	# Return the score
-	# combined.shape[0] tells us how many rows there are
-	colors = list()
+	combined = combine_patches(patch1, patch2, combination_index).astype(int)
+	diffs = list()
 	middle_seam_index1 = (combined.shape[1] // 2) - 1
 	middle_seam_index2 = combined.shape[1] // 2
-	for n in range(combined.shape[0]):
-		# also need to go through the columns?
-		red1 = int(combined[n, middle_seam_index1, 0])
-		green1 = int(combined[n, middle_seam_index1, 1])
-		blue1 = int(combined[n, middle_seam_index1, 2])
-		red2 = int(combined[n, middle_seam_index2, 0])
-		green2 = int(combined[n, middle_seam_index2, 1])
-		blue2 = int(combined[n, middle_seam_index2, 2])
-
-		diff_red = abs(red1 - red2)
-		diff_green = abs(green1 - green2)
-		diff_blue = abs(blue1 - blue2)
-
-		# add them all up into a list
-		colors.append(diff_red)
-		colors.append(diff_green)
-		colors.append(diff_blue)
-		# average list at the end
-	total = sum(colors)
+	# left deep, right shallow
+	diff_array = abs(combined[:, middle_seam_index1 - 1, :] - combined[:, middle_seam_index2, :])
+	diffs += list(diff_array.flatten())
+	# both shallow
+	diff_array = abs(combined[:, middle_seam_index1, :] - combined[:, middle_seam_index2, :])
+	diffs += list(diff_array.flatten())
+	# left shallow, right deep
+	diff_array = abs(combined[:, middle_seam_index1, :] - combined[:, middle_seam_index2 + 1, :])
+	diffs += list(diff_array.flatten())
+	# average list at the end
 	# // because we want the score to be integers
-	score = total // len(colors)
-	return score
-
-
-	# we want to go through each row and compare it with the column right next to it?
-	# that is maybe what this line is saying?
-	# score = # value at combined.shape[0] - value at combined.shape[1]??? is that even legal?
+	return sum(diffs) // len(diffs)
 
 
 def build_graph(patches: list) -> np.ndarray:
@@ -188,16 +170,11 @@ def build_graph(patches: list) -> np.ndarray:
 	# making an empty array with the following type that is (n, n, 16) big
 	dissimilarity_scores = np.empty((n, n, 16), dtype=int)
 	# Call dissimilarity_score function and put that number into the matrix (dissimilarity_scores), return matrix
-	# new_score = dissimilarity_score(n, n, 26)
-	# dissimilarity_scores.reshape(new_score, new_score, 16)
-	# dissimilarity_scores[i, j, c] = new_score
-	# shouldn't it be new_score = dissimilarity_scores[i, j, c]???
-	# for each loop that gives you the index
+	# "for each" loop that gives you the index
 	for i, patch1 in enumerate(patches):
 		for j, patch2 in enumerate(patches):
 			for c in range(16):
 				dissimilarity_scores[i, j, c] = dissimilarity_score(patch1, patch2, c)
-
 	return dissimilarity_scores
 
 

@@ -3,8 +3,7 @@ from unittest import TestCase
 import numpy as np
 import matplotlib.pyplot as plt
 import random
-from image_assembly import assemble_image, build_graph, combination_index_from_rotations, combine_patches, jigsaw_kruskals, load_image_from_disk, scramble_image, show_image, \
-	assemble_patches
+from image_assembly import assemble_image, build_graph, jigsaw_kruskals, load_image_from_disk, scramble_image, show_image, assemble_patches
 
 
 def verify_reconstruction_matrix(matrix: np.ndarray, n: int) -> bool:
