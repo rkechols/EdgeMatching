@@ -1,4 +1,5 @@
 import copy
+from typing import Union
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -34,11 +35,10 @@ def show_image(image_rgb: np.ndarray):
 	plt.show()
 
 
-def assemble_patches(patches: list, num_cols: int) -> np.ndarray:
+def assemble_patches(patches: list, num_cols: int) -> Union[None, np.ndarray]:
 	n = len(patches)
 	if n == 0:
-		print("no patches to show")
-		return
+		return None
 	patch_size = patches[0].shape[0]  # assumes all are the same size and square
 	num_rows = n // num_cols
 	if n % num_cols != 0:
@@ -128,7 +128,7 @@ def build_graph(patches: list) -> np.ndarray:
 	pass
 
 
-def combine_blocks(first_block: np.ndarray, second_block: np.ndarray, a: int, b: int, r: int) -> np.ndarray:
+def combine_blocks(first_block: np.ndarray, second_block: np.ndarray, a: int, b: int, r: int) -> Union[None, np.ndarray]:
 	# get the rotation values of each block
 	r1, r2 = rotations_from_combination_index(r)
 	first_block = np.rot90(first_block, (4 - r1) % 4)
