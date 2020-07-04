@@ -127,13 +127,16 @@ def combine_patches(patch1: np.ndarray, patch2: np.ndarray, combination_index: i
 	return combined
 
 
-def scramble_image(image: np.ndarray, patch_size: int) -> list:
+def scramble_image(image: np.ndarray, patch_size: int, seed: int = None) -> list:
 	"""
 	takes an rgb image and scrambles it into square patches, each at a random rotation
 	:param image: numpy array of shape (r, c, 3) where r is the number of rows and c is the number of columns
 	:param patch_size: number indicating how many pixels wide and tall each patch should be
+	:param seed: a seed to use for the image scrambling. If none, then the scramble will be truly random
 	:return: a list containing the scrambled patches, each of shape (patch_size, patch_size, 3)
 	"""
+	if seed is not None:
+		random.seed(seed)
 	# get the image (we actually have it: np.ndarray)
 	# Break image into patches
 	vertical_patches = image.shape[0] // patch_size
@@ -161,22 +164,33 @@ def scramble_image(image: np.ndarray, patch_size: int) -> list:
 	return rotated_patched_array
 
 
-def dissimilarity_score(patch1: np.ndarray, patch2: np.ndarray, combination_index: int) -> float:
-	combined = combine_patches(patch1, patch2, combination_index).astype(int)
+def dissimilarity_score(combo_patch: np.ndarray) -> float:
 	diffs = list()
-	middle_seam_index1 = (combined.shape[1] // 2) - 1
-	middle_seam_index2 = combined.shape[1] // 2
+	middle_seam_index1 = (combo_patch.shape[1] // 2) - 1
+	middle_seam_index2 = combo_patch.shape[1] // 2
 	# left deep, right shallow
-	diff_array = abs(combined[:, middle_seam_index1 - 1, :] - combined[:, middle_seam_index2, :])
+	diff_array = abs(combo_patch[:, middle_seam_index1 - 1, :] - combo_patch[:, middle_seam_index2, :])
 	diffs += list(diff_array.flatten())
 	# both shallow
-	diff_array = abs(combined[:, middle_seam_index1, :] - combined[:, middle_seam_index2, :])
+	diff_array = abs(combo_patch[:, middle_seam_index1, :] - combo_patch[:, middle_seam_index2, :])
 	diffs += list(diff_array.flatten())
 	# left shallow, right deep
-	diff_array = abs(combined[:, middle_seam_index1, :] - combined[:, middle_seam_index2 + 1, :])
+	diff_array = abs(combo_patch[:, middle_seam_index1, :] - combo_patch[:, middle_seam_index2 + 1, :])
 	diffs += list(diff_array.flatten())
 	# average list at the end
 	return sum(diffs) / len(diffs)
+
+
+def boring_score(combo_patch: np.ndarray) -> float:
+	diffs = list()
+	middle_seam_index1 = (combo_patch.shape[1] // 2) - 1
+	middle_seam_index2 = combo_patch.shape[1] // 2
+	for seam_index in [middle_seam_index1 - 1, middle_seam_index1, middle_seam_index2, middle_seam_index2 + 1]:
+		for vertical_shift in range(1, 5):
+			diff_array = abs(combo_patch[:(-1 * vertical_shift), seam_index, :] - combo_patch[vertical_shift:, seam_index, :])
+			diffs += list(diff_array.flatten())
+	# average list at the end
+	return 255 - (sum(diffs) / len(diffs))
 
 
 def build_graph(patches: list) -> np.ndarray:
@@ -187,15 +201,40 @@ def build_graph(patches: list) -> np.ndarray:
 	along their shared edge when using combination index c
 	"""
 	n = len(patches)
-	# making an empty array with the following type that is (n, n, 16) big
-	dissimilarity_scores = np.empty((n, n, 16), dtype=float)
-	# Call dissimilarity_score function and put that number into the matrix (dissimilarity_scores), return matrix
+	# calculate boring scores
+	boring_scores = np.empty((n, n, 16), dtype=float)
+	for i, patch1 in enumerate(patches):
+		for j, patch2 in enumerate(patches):
+			for c in range(16):
+				combined = combine_patches(patch1, patch2, c).astype(int)
+				boring_scores[i, j, c] = boring_score(combined)
+	# normalize boring scores
+	b_min = np.amin(boring_scores)
+	b_max = np.amax(boring_scores)
+	print(f"before normalization... min: {b_min}\t\tmax: {b_max}")
+	boring_scores_normalized = ((boring_scores - b_min) / (b_max - b_min)) * 255
+	print(f"normalized min: {np.amin(boring_scores_normalized)}")
+	print(f"normalized max: {np.amax(boring_scores_normalized)}")
+	# calculate dissimilarity scores and add them to boring scores
+	pairing_scores = np.empty((n, n, 16), dtype=float)
 	# "for each" loop that gives you the index
 	for i, patch1 in enumerate(patches):
 		for j, patch2 in enumerate(patches):
 			for c in range(16):
-				dissimilarity_scores[i, j, c] = dissimilarity_score(patch1, patch2, c)
-	return dissimilarity_scores
+				if i == j:
+					pairing_scores[i, j, c] = INFINITY
+					continue
+				combined = combine_patches(patch1, patch2, c).astype(int)
+				d_score = dissimilarity_score(combined)
+				b_score = boring_scores_normalized[i, j, c]
+				score = d_score + b_score
+				# show_image(combined)
+				# print(f"d_score: {d_score}\t\tb_score: {b_score}\t\tnet: {score}")
+				if d_score < 10:
+					pairing_scores[i, j, c] = d_score
+				else:
+					pairing_scores[i, j, c] = score
+	return pairing_scores
 
 
 def combine_blocks(first_block: np.ndarray, second_block: np.ndarray, a: int, b: int, r: int) -> Union[None, np.ndarray]:
@@ -315,10 +354,10 @@ def assemble_image(patches: list, construction_matrix: np.ndarray) -> np.ndarray
 
 
 if __name__ == "__main__":
-	original_image = load_image_from_disk("TestImages/Strange.png")
+	original_image = load_image_from_disk("TestImages/theo.jpg")
 	show_image(original_image)
-	ps = 75
-	patch_list = scramble_image(original_image, ps)
+	ps = original_image.shape[1] // 3
+	patch_list = scramble_image(original_image, ps, 4)
 	show_image(assemble_patches(patch_list, original_image.shape[1] // ps))
 	adjacency_matrix = build_graph(patch_list)
 	reconstruction_matrix = jigsaw_kruskals(adjacency_matrix)
