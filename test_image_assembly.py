@@ -3,28 +3,7 @@ from unittest import TestCase
 import numpy as np
 import matplotlib.pyplot as plt
 import random
-from image_assembly import assemble_image, build_graph, jigsaw_kruskals, load_image_from_disk, scramble_image, show_image, assemble_patches
-
-
-def verify_reconstruction_matrix(matrix: np.ndarray, n: int) -> bool:
-	passes = True
-	to_find = set(list(range(n)))
-	flattened = list(matrix[:, :, 0].flatten())
-	for i, val in enumerate(flattened):
-		if val == -1:
-			continue
-		if val in to_find:
-			to_find.remove(val)
-			flattened[i] = -1
-			continue
-		else:
-			print(f"{val} was not found in the reconstruction matrix")
-			passes = False
-	for val in flattened:
-		if val != -1:
-			print(f"found an unexpected number i the reconstruction matrix: {val}")
-			passes = False
-	return passes
+from image_assembly import assemble_image, build_graph, jigsaw_kruskals, load_image_from_disk, scramble_image, show_image, assemble_patches, verify_reconstruction_matrix
 
 
 def get_test_patches() -> list:

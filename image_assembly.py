@@ -15,6 +15,27 @@ ROTATION_180 = 2
 ROTATION_270 = 3
 
 
+def verify_reconstruction_matrix(matrix: np.ndarray, n: int) -> bool:
+	passes = True
+	to_find = set(list(range(n)))
+	flattened = list(matrix[:, :, 0].flatten())
+	for i, val in enumerate(flattened):
+		if val == -1:
+			continue
+		if val in to_find:
+			to_find.remove(val)
+			flattened[i] = -1
+			continue
+		else:
+			print(f"{val} was not found in the reconstruction matrix")
+			passes = False
+	for val in flattened:
+		if val != -1:
+			print(f"found an unexpected number i the reconstruction matrix: {val}")
+			passes = False
+	return passes
+
+
 def load_image_from_disk(image_file_name: str) -> np.ndarray:
 	"""
 	takes a path to an image file and loads it from disk
@@ -140,7 +161,7 @@ def scramble_image(image: np.ndarray, patch_size: int) -> list:
 	return rotated_patched_array
 
 
-def dissimilarity_score(patch1: np.ndarray, patch2: np.ndarray, combination_index: int) -> int:
+def dissimilarity_score(patch1: np.ndarray, patch2: np.ndarray, combination_index: int) -> float:
 	combined = combine_patches(patch1, patch2, combination_index).astype(int)
 	diffs = list()
 	middle_seam_index1 = (combined.shape[1] // 2) - 1
@@ -155,8 +176,7 @@ def dissimilarity_score(patch1: np.ndarray, patch2: np.ndarray, combination_inde
 	diff_array = abs(combined[:, middle_seam_index1, :] - combined[:, middle_seam_index2 + 1, :])
 	diffs += list(diff_array.flatten())
 	# average list at the end
-	# // because we want the score to be integers
-	return sum(diffs) // len(diffs)
+	return sum(diffs) / len(diffs)
 
 
 def build_graph(patches: list) -> np.ndarray:
@@ -168,7 +188,7 @@ def build_graph(patches: list) -> np.ndarray:
 	"""
 	n = len(patches)
 	# making an empty array with the following type that is (n, n, 16) big
-	dissimilarity_scores = np.empty((n, n, 16), dtype=int)
+	dissimilarity_scores = np.empty((n, n, 16), dtype=float)
 	# Call dissimilarity_score function and put that number into the matrix (dissimilarity_scores), return matrix
 	# "for each" loop that gives you the index
 	for i, patch1 in enumerate(patches):
@@ -242,6 +262,8 @@ def jigsaw_kruskals(graph: np.ndarray) -> np.ndarray:
 		min_edges = np.where(graph == np.amin(graph))
 		min_edges = list(zip(min_edges[0], min_edges[1], min_edges[2]))
 		for a, b, r in min_edges:
+			if a == b:
+				continue
 			# find the two blocks
 			first_block_index = -1
 			second_block_index = -1
@@ -295,10 +317,12 @@ def assemble_image(patches: list, construction_matrix: np.ndarray) -> np.ndarray
 if __name__ == "__main__":
 	original_image = load_image_from_disk("TestImages/Strange.png")
 	show_image(original_image)
-	patch_list = scramble_image(original_image, 75)
-	for p in patch_list:
-		show_image(p)
+	ps = 75
+	patch_list = scramble_image(original_image, ps)
+	show_image(assemble_patches(patch_list, original_image.shape[1] // ps))
 	adjacency_matrix = build_graph(patch_list)
 	reconstruction_matrix = jigsaw_kruskals(adjacency_matrix)
-	reconstructed_image = assemble_image(patch_list, reconstruction_matrix)
-	show_image(reconstructed_image)
+	valid = verify_reconstruction_matrix(reconstruction_matrix, len(patch_list))
+	print(f"valid: {valid}")
+	# reconstructed_image = assemble_image(patch_list, reconstruction_matrix)
+	# show_image(reconstructed_image)
