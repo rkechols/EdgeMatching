@@ -323,6 +323,10 @@ if __name__ == "__main__":
 	adjacency_matrix = build_graph(patch_list)
 	reconstruction_matrix = jigsaw_kruskals(adjacency_matrix)
 	valid = verify_reconstruction_matrix(reconstruction_matrix, len(patch_list))
-	print(f"valid: {valid}")
-	# reconstructed_image = assemble_image(patch_list, reconstruction_matrix)
-	# show_image(reconstructed_image)
+	print(f"reconstruction_matrix valid: {valid}")
+	if valid:
+		reconstructed_image = assemble_image(patch_list, reconstruction_matrix)
+		if reconstructed_image is not None:
+			show_image(reconstructed_image)
+		else:
+			print("reconstructed_image is None")
