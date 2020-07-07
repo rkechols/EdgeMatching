@@ -288,38 +288,31 @@ def assemble_image(patches: list, construction_matrix: np.ndarray) -> np.ndarray
 	should be located in that slot, and [i, j, 1] gives the rotation index of that patch
 	:return: the re-assembled image as a numpy array of shape (x, y, 3)
 	"""
-	# getting a single numpy array
-	patch = patches[0]
-	# tells us how many rows there are
-	num_of_pixels = patch.shape[0]
-	# num of rows/cols
+	# tells us how many pixels tall/wide each patch is
+	num_of_pixels = patches[0].shape[0]
+	# num of rows/cols (of patches)
 	rows = construction_matrix.shape[0]
 	columns = construction_matrix.shape[1]
 	# putting it together, it's an int because we are working with an image
-	assembled = np.empty((rows * num_of_pixels, columns * num_of_pixels, 3), dtype=int)
-	# 0 is black, -1 is color
-	assembled[:, :, :] = 0
-
-	# iterate across cons_matrix... (it tells us what piece to pull and where to rotate)
+	# starts at zeros because 0 is black
+	assembled = np.zeros((rows * num_of_pixels, columns * num_of_pixels, 3), dtype=int)
+	# iterate across construction_matrix... (it tells us what piece to pull and where to rotate)
 	for i in range(construction_matrix.shape[0]):
 		for j in range(construction_matrix.shape[1]):
 			# index of the patch
 			patch_index = construction_matrix[i, j, 0]
-			# rotation index of the patch
+			# if it's a -1, that means that no piece goes there and we leave it as black
 			if patch_index == -1:
 				continue
+			# rotation index of the patch
 			rotation_command = construction_matrix[i, j, 1]
 			# get the actual patch
 			patch_in_question = patches[patch_index]
+			# rotate it
 			rotated_patch = np.rot90(patch_in_question, rotation_command)
-			assembled[(i * num_of_pixels):(num_of_pixels*(i + 1)), (j * num_of_pixels):(num_of_pixels * (j + 1)), :] = rotated_patch
+			# put it in its place
+			assembled[(i * num_of_pixels):(num_of_pixels * (i + 1)), (j * num_of_pixels):(num_of_pixels * (j + 1)), :] = rotated_patch
 	return assembled
-	# look at patches to get "piece 5" out of the list, rotate it n number of times
-	# for rotation index: 0 = don't rotate, 1 = 90 degrees, 2 = 180 degrees, 3 = 270 degrees
-
-	# put that into the right spot into an array that we are building
-	# look at 205 to know how to make an array
-	# -1 means no piece (write "blackness")
 
 
 if __name__ == "__main__":
