@@ -288,7 +288,38 @@ def assemble_image(patches: list, construction_matrix: np.ndarray) -> np.ndarray
 	should be located in that slot, and [i, j, 1] gives the rotation index of that patch
 	:return: the re-assembled image as a numpy array of shape (x, y, 3)
 	"""
-	# TODO
+	# I don't think I need dtype? Also not sure what to put for height/width?
+	assembled = np.empty()
+	assembled = np.empty(, , 2), dtype=.dtype)
+	assembled[:, :, :] = -1
+	# assembled[:first_block.shape[0], :first_block.shape[1], :] = first_block
+	# for row in range(second_block.shape[0]):
+	# 	for col in range(second_block.shape[1]):
+	# 		if second_block[row, col, 0] == -1:
+	# 			continue
+	# 		row_combined = row + row_shift
+	# 		col_combined = col + col_shift
+	# 		try:
+	# 			if combined_block[row_combined, col_combined, 0] == -1:
+	# 				combined_block[row_combined, col_combined] = second_block[row, col]
+	# 			else:  # found a conflict
+	# 				return None
+	# 		except IndexError:
+	# 			continue
+	# return combined_block
+
+	# iterate across cons_matrix... (it tells us what piece to pull and where to rotate)
+	for i in range(construction_matrix):
+		# index of the patch
+		construction_matrix[i, j, 0]
+		# rotation index of the patch
+		construction_matrix[i, j, 1]
+	# look at patches to get "piece 5" out of the list, rotate it n number of times
+
+
+	# put that into the right spot into an array that we are building
+	# look at 205 to know how to make an array
+	# -1 means no piece (write "blackness")
 	pass
 
 
@@ -296,8 +327,9 @@ if __name__ == "__main__":
 	original_image = load_image_from_disk("TestImages/Strange.png")
 	show_image(original_image)
 	patch_list = scramble_image(original_image, 75)
-	for p in patch_list:
-		show_image(p)
+	# for p in patch_list:
+	# 	show_image(p)
+	show_image(assemble_patches(patch_list, 6))
 	adjacency_matrix = build_graph(patch_list)
 	reconstruction_matrix = jigsaw_kruskals(adjacency_matrix)
 	reconstructed_image = assemble_image(patch_list, reconstruction_matrix)
