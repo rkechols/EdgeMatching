@@ -3,7 +3,8 @@ from unittest import TestCase
 import numpy as np
 import matplotlib.pyplot as plt
 import random
-from image_assembly import assemble_image, build_graph, jigsaw_kruskals, load_image_from_disk, scramble_image, show_image, assemble_patches, verify_reconstruction_matrix
+from image_assembly import assemble_image, build_graph, combine_blocks, jigsaw_kruskals, load_image_from_disk, scramble_image, show_image, assemble_patches, \
+	verify_reconstruction_matrix
 
 
 def get_test_patches() -> list:
@@ -70,6 +71,13 @@ class KruskalsTest(TestCase):
 		self.assertLess(matrix[2, 3, 7], matrix[1, 3, 11], "similar shades should have a better score then blatantly different colors")
 		self.assertLess(matrix[2, 3, 13], matrix[3, 2, 0], "identical interesting edges should give a lower score than identical boring edges")
 		self.assertEqual(np.amin(matrix), matrix[2, 3, 13], "identical and interesting edges should give the lowest score")
+
+	def test_combine_blocks(self):
+		bar_block1 = np.array([[[1, 0], [2, 2]]])
+		bar_block2 = np.array([[[0, 0]], [[3, 0]]])
+		answer1 = np.array([[[1, 0], [2, 2]], [[0, 1], [3, 1]]])
+		actual1 = combine_blocks(bar_block1, bar_block2, 1, 0, 14)
+		self.assertTrue(np.alltrue(answer1 == actual1))
 
 	def test_assemble_image(self):
 		original = load_image_from_disk("TestImages/TestPatches.png")
