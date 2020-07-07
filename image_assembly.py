@@ -4,6 +4,8 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import random
+from PatchPairBoolNet import PatchPairBoolNet
+import torch
 
 
 INFINITY = float("inf")
@@ -46,13 +48,18 @@ def load_image_from_disk(image_file_name: str) -> np.ndarray:
 	return np.fliplr(badly_oriented_image.reshape(-1, 3)).reshape(badly_oriented_image.shape)
 
 
-def show_image(image_rgb: np.ndarray):
+def show_image(image_rgb: np.ndarray, label: str = None):
 	"""
 	shows an rgb image
 	:param image_rgb: the image to show as a numpy array with shape (r, c, 3)
+	:param label: a label to apply to the image
 	:return: None
 	"""
-	plt.imshow(image_rgb)
+	plt.style.use("dark_background")
+	plt.imshow(image_rgb, vmin=0, vmax=255)
+	plt.axis("off")
+	if label is not None:
+		plt.title(label)
 	plt.show()
 
 
@@ -65,7 +72,7 @@ def assemble_patches(patches: list, num_cols: int) -> Union[None, np.ndarray]:
 	if n % num_cols != 0:
 		num_rows += 1
 	# tile the patches
-	assembled = np.zeros((num_rows * patch_size, num_cols * patch_size, 3), dtype=int)
+	assembled = np.zeros((num_rows * patch_size, num_cols * patch_size, 3), dtype=patches[0].dtype)
 	for i, patch in enumerate(patches):
 		row = i // num_cols
 		col = i % num_cols
@@ -228,12 +235,33 @@ def build_graph(patches: list) -> np.ndarray:
 				d_score = dissimilarity_score(combined)
 				b_score = boring_scores_normalized[i, j, c]
 				score = d_score + b_score
-				# show_image(combined)
-				# print(f"d_score: {d_score}\t\tb_score: {b_score}\t\tnet: {score}")
+				# show_image(combined, f"d_score: {d_score}\t\tb_score: {b_score}\t\tnet: {score}")
 				if d_score < 10:
 					pairing_scores[i, j, c] = d_score
 				else:
 					pairing_scores[i, j, c] = score
+	return pairing_scores
+
+
+def build_graph_from_nn(patches: list, nn_path: str) -> np.ndarray:
+	# get the nn set up
+	net = PatchPairBoolNet()
+	net.load_state_dict(torch.load(nn_path))
+	device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+	net.to(device)
+	# get all the scores using the net
+	n = len(patches)
+	pairing_scores = np.empty((n, n, 16), dtype=float)
+	# "for each" loop that gives you the index
+	for i, patch1 in enumerate(patches):
+		for j, patch2 in enumerate(patches):
+			for c in range(16):
+				if i == j:
+					pairing_scores[i, j, c] = INFINITY
+					continue
+				combined = combine_patches(patch1, patch2, c)
+				score = net.forward_numpy(combined, device)
+				pairing_scores[i, j, c] = score
 	return pairing_scores
 
 
@@ -280,7 +308,7 @@ def combine_blocks(first_block: np.ndarray, second_block: np.ndarray, a: int, b:
 	return combined_block
 
 
-def jigsaw_kruskals(graph: np.ndarray) -> np.ndarray:
+def jigsaw_kruskals(graph: np.ndarray, patches: list = None) -> np.ndarray:
 	"""
 	takes an adjacency matrix and uses kruskal's algorithm to build a reconstruction matrix
 	:param graph: a numpy array with shape (n, n, 16) giving the dissimilarity scores for the n patches
@@ -326,6 +354,10 @@ def jigsaw_kruskals(graph: np.ndarray) -> np.ndarray:
 			if combined_block is None:
 				graph[a, b, r] = INFINITY
 				continue
+			if patches is not None:
+				show_image(assemble_image(patches, first_block), "first")
+				show_image(assemble_image(patches, second_block), "second")
+				show_image(assemble_image(patches, combined_block), f"combined, score: {str(graph[a, b, r])}")
 			# adjust our data for next iteration
 			if second_block_index < first_block_index:
 				first_block_index, second_block_index = second_block_index, first_block_index
@@ -341,7 +373,7 @@ def jigsaw_kruskals(graph: np.ndarray) -> np.ndarray:
 	return sections[0][1]
 
 
-def assemble_image(patches: list, construction_matrix: np.ndarray) -> np.ndarray:
+def assemble_image(patches: list, construction_matrix: np.ndarray) -> Union[None, np.ndarray]:
 	"""
 	takes a list of patches and a reconstruction matrix to assemble the patches
 	:param patches: a list of numpy arrays representing the scrambled patches of the original image
@@ -349,18 +381,33 @@ def assemble_image(patches: list, construction_matrix: np.ndarray) -> np.ndarray
 	should be located in that slot, and [i, j, 1] gives the rotation index of that patch
 	:return: the re-assembled image as a numpy array of shape (x, y, 3)
 	"""
-	# TODO
-	pass
+	if len(patches) == 0:
+		return None
+	patch_size = patches[0].shape[0]
+	rows, cols, _ = construction_matrix.shape
+	reconstructed = np.zeros((rows * patch_size, cols * patch_size, 3), dtype=patches[0].dtype)
+	for i in range(rows):
+		for j in range(cols):
+			patch_index = construction_matrix[i, j, 0]
+			if patch_index == -1:
+				continue
+			rotation_index = construction_matrix[i, j, 1]
+			patch = np.rot90(patches[patch_index], rotation_index)
+			row_start_pixel = i * patch_size
+			col_start_pixel = j * patch_size
+			reconstructed[row_start_pixel:(row_start_pixel + patch_size), col_start_pixel:(col_start_pixel + patch_size), :] = patch
+	return reconstructed
 
 
 if __name__ == "__main__":
-	original_image = load_image_from_disk("TestImages/theo.jpg")
+	original_image = load_image_from_disk("TestImages/Giraffe.jpg")
 	show_image(original_image)
-	ps = original_image.shape[1] // 3
+	# ps = original_image.shape[1] // 3
+	ps = 28
 	patch_list = scramble_image(original_image, ps, 4)
 	show_image(assemble_patches(patch_list, original_image.shape[1] // ps))
-	adjacency_matrix = build_graph(patch_list)
-	reconstruction_matrix = jigsaw_kruskals(adjacency_matrix)
+	adjacency_matrix = build_graph_from_nn(patch_list, "./patch_pair_boolean_net.pth")
+	reconstruction_matrix = jigsaw_kruskals(adjacency_matrix, patch_list)
 	valid = verify_reconstruction_matrix(reconstruction_matrix, len(patch_list))
 	print(f"reconstruction_matrix valid: {valid}")
 	if valid:
