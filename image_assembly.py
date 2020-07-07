@@ -381,22 +381,31 @@ def assemble_image(patches: list, construction_matrix: np.ndarray) -> Union[None
 	should be located in that slot, and [i, j, 1] gives the rotation index of that patch
 	:return: the re-assembled image as a numpy array of shape (x, y, 3)
 	"""
-	if len(patches) == 0:
-		return None
+	# tells us how many pixels tall/wide each patch is
 	patch_size = patches[0].shape[0]
-	rows, cols, _ = construction_matrix.shape
-	reconstructed = np.zeros((rows * patch_size, cols * patch_size, 3), dtype=patches[0].dtype)
-	for i in range(rows):
-		for j in range(cols):
+	# num of rows/cols (of patches)
+	rows = construction_matrix.shape[0]
+	columns = construction_matrix.shape[1]
+	# putting it together, it's an int because we are working with an image
+	# starts at zeros because 0 is black
+	assembled = np.zeros((rows * patch_size, columns * patch_size, 3), dtype=int)
+	# iterate across construction_matrix... (it tells us what piece to pull and where to rotate)
+	for i in range(construction_matrix.shape[0]):
+		for j in range(construction_matrix.shape[1]):
+			# index of the patch
 			patch_index = construction_matrix[i, j, 0]
+			# if it's a -1, that means that no piece goes there and we leave it as black
 			if patch_index == -1:
 				continue
-			rotation_index = construction_matrix[i, j, 1]
-			patch = np.rot90(patches[patch_index], rotation_index)
-			row_start_pixel = i * patch_size
-			col_start_pixel = j * patch_size
-			reconstructed[row_start_pixel:(row_start_pixel + patch_size), col_start_pixel:(col_start_pixel + patch_size), :] = patch
-	return reconstructed
+			# rotation index of the patch
+			rotation_command = construction_matrix[i, j, 1]
+			# get the actual patch
+			patch_in_question = patches[patch_index]
+			# rotate it
+			rotated_patch = np.rot90(patch_in_question, rotation_command)
+			# put it in its place
+			assembled[(i * patch_size):(patch_size * (i + 1)), (j * patch_size):(patch_size * (j + 1)), :] = rotated_patch
+	return assembled
 
 
 if __name__ == "__main__":
