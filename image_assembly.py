@@ -254,6 +254,7 @@ def build_graph_from_nn(patches: list, nn_path: str) -> np.ndarray:
 	pairing_scores = np.empty((n, n, 16), dtype=float)
 	# "for each" loop that gives you the index
 	for i, patch1 in enumerate(patches):
+		print(f"round {i} of {len(patches)}")
 		for j, patch2 in enumerate(patches):
 			for c in range(16):
 				if i == j:
@@ -447,7 +448,7 @@ def assemble_image(patches: list, construction_matrix: np.ndarray) -> Union[None
 
 
 if __name__ == "__main__":
-	original_image = load_image_from_disk("TestImages/funny.png")
+	original_image = load_image_from_disk("TestImages/Strange.png")
 	show_image(original_image)
 	# ps = original_image.shape[1] // 3
 	ps = 28
