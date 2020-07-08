@@ -312,22 +312,24 @@ def combine_blocks(first_block: np.ndarray, second_block: np.ndarray, a: int, b:
 	first_block = block_rot90(first_block, a_rotate + r1_reversed)
 	second_block = block_rot90(second_block, b_rotate + r2_reversed)
 	# figure out how wide and tall the combined piece is going to be, and what the shift is
-	height = max(a_loc[0] + (second_block.shape[0] - b_loc[0]), first_block.shape[0], second_block.shape[0])
-	width = max(a_loc[1] + (second_block.shape[1] - b_loc[1]) + 1, first_block.shape[1], second_block.shape[1])
 	row_shift = a_loc[0] - b_loc[0]
 	if row_shift >= 0:
 		first_row_shift = 0
 		second_row_shift = row_shift
+		height = max(first_block.shape[0], second_row_shift + second_block.shape[0])
 	else:
 		first_row_shift = -row_shift
 		second_row_shift = 0
+		height = max(first_row_shift + first_block.shape[0], second_block.shape[0])
 	col_shift = (a_loc[1] - b_loc[1]) + 1
 	if col_shift >= 0:
 		first_col_shift = 0
 		second_col_shift = col_shift
+		width = max(first_block.shape[1], second_col_shift + second_block.shape[1])
 	else:
 		first_col_shift = -col_shift
 		second_col_shift = 0
+		width = max(first_col_shift + first_block.shape[1], second_block.shape[1])
 	# combine the blocks, if we can
 	combined_block = np.empty((height, width, 2), dtype=first_block.dtype)
 	combined_block[:, :, :] = -1
@@ -348,7 +350,7 @@ def combine_blocks(first_block: np.ndarray, second_block: np.ndarray, a: int, b:
 	return combined_block
 
 
-def jigsaw_kruskals(graph: np.ndarray, patches: list = None) -> np.ndarray:
+def jigsaw_kruskals(graph: np.ndarray) -> np.ndarray:
 	"""
 	takes an adjacency matrix and uses kruskal's algorithm to build a reconstruction matrix
 	:param graph: a numpy array with shape (n, n, 16) giving the dissimilarity scores for the n patches
@@ -394,10 +396,6 @@ def jigsaw_kruskals(graph: np.ndarray, patches: list = None) -> np.ndarray:
 			if combined_block is None:
 				graph[a, b, r] = INFINITY
 				continue
-			if patches is not None:
-				# show_image(assemble_image(patches, first_block), f"first : r = {r}")
-				# show_image(assemble_image(patches, second_block), "second")
-				show_image(assemble_image(patches, combined_block), f"combined, score: {str(graph[a, b, r])}")
 			# adjust our data for next iteration
 			if second_block_index < first_block_index:
 				first_block_index, second_block_index = second_block_index, first_block_index
@@ -449,7 +447,7 @@ def assemble_image(patches: list, construction_matrix: np.ndarray) -> Union[None
 
 
 if __name__ == "__main__":
-	original_image = load_image_from_disk("TestImages/Giraffe.jpg")
+	original_image = load_image_from_disk("TestImages/funny.png")
 	show_image(original_image)
 	# ps = original_image.shape[1] // 3
 	ps = 28

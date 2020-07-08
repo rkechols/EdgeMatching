@@ -27,6 +27,7 @@ class KruskalsTest(TestCase):
 		for n in range(10, 30):
 			domain.append(n)
 			times = list()
+			random.seed(4)
 			for trial in range(10):
 				test_graph = np.array([[[random.randrange(101) for r in range(16)] for b in range(n)] for a in range(n)], dtype=float)
 				time_start = time.time()
