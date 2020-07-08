@@ -265,13 +265,29 @@ def build_graph_from_nn(patches: list, nn_path: str) -> np.ndarray:
 	return pairing_scores
 
 
+def coord_rot90(row: int, col: int, m: int, n: int, r: int = 1) -> (int, int):
+	r %= 4
+	if r == 0:
+		return row, col
+	if r == 1:
+		return n - (col + 1), row
+	if r == 2:
+		return m - (row + 1), n - (col + 1)
+	if r == 3:
+		return col, m - (row + 1)
+
+
+def block_rot90(block: np.ndarray, r: int) -> np.ndarray:
+	r %= 4
+	block = np.rot90(block, r)
+	block[:, :, 1] += r
+	block[:, :, 1] %= 4
+	return block
+
+
 def combine_blocks(first_block: np.ndarray, second_block: np.ndarray, a: int, b: int, r: int) -> Union[None, np.ndarray]:
-	# get the rotation values of each block
-	r1, r2 = rotations_from_combination_index(r)
-	first_block = np.rot90(first_block, (4 - r1) % 4)
-	first_block[:, :, 1] = (first_block[:, :, 1] - r1) % 4
-	second_block = np.rot90(second_block, (4 - r2) % 4)
-	second_block[:, :, 1] = (second_block[:, :, 1] - r2) % 4
+	first_block = np.copy(first_block)
+	second_block = np.copy(second_block)
 	# check that the two values are indeed in their blocks, and where
 	a_locs = np.where(first_block[:, :, 0] == a)
 	a_locs = list(zip(a_locs[0], a_locs[1]))
@@ -283,21 +299,45 @@ def combine_blocks(first_block: np.ndarray, second_block: np.ndarray, a: int, b:
 	if len(b_locs) != 1:
 		raise RuntimeError("'b' could not be found (or was found multiple times) in the second block when combining blocks")
 	b_loc = b_locs[0]
+	# find how far each base piece has been rotated already and reverse it
+	a_rotate = (4 - first_block[a_loc][1]) % 4
+	b_rotate = (4 - second_block[b_loc][1]) % 4
+	# get the rotation values of each block
+	r1, r2 = rotations_from_combination_index(r)
+	r1_reversed = (4 - r1) % 4
+	r2_reversed = (4 - r2) % 4
+	# when the blocks are rotated, a_loc and b_loc will have changed
+	a_loc = coord_rot90(a_loc[0], a_loc[1], first_block.shape[0], first_block.shape[1], a_rotate + r1_reversed)
+	b_loc = coord_rot90(b_loc[0], b_loc[1], second_block.shape[0], second_block.shape[1], b_rotate + r2_reversed)
+	first_block = block_rot90(first_block, a_rotate + r1_reversed)
+	second_block = block_rot90(second_block, b_rotate + r2_reversed)
 	# figure out how wide and tall the combined piece is going to be, and what the shift is
 	height = max(a_loc[0] + (second_block.shape[0] - b_loc[0]), first_block.shape[0], second_block.shape[0])
 	width = max(a_loc[1] + (second_block.shape[1] - b_loc[1]) + 1, first_block.shape[1], second_block.shape[1])
 	row_shift = a_loc[0] - b_loc[0]
+	if row_shift >= 0:
+		first_row_shift = 0
+		second_row_shift = row_shift
+	else:
+		first_row_shift = -row_shift
+		second_row_shift = 0
 	col_shift = (a_loc[1] - b_loc[1]) + 1
+	if col_shift >= 0:
+		first_col_shift = 0
+		second_col_shift = col_shift
+	else:
+		first_col_shift = -col_shift
+		second_col_shift = 0
 	# combine the blocks, if we can
 	combined_block = np.empty((height, width, 2), dtype=first_block.dtype)
 	combined_block[:, :, :] = -1
-	combined_block[:first_block.shape[0], :first_block.shape[1], :] = first_block
+	combined_block[first_row_shift:(first_block.shape[0] + first_row_shift), first_col_shift:(first_block.shape[1] + first_col_shift), :] = first_block
 	for row in range(second_block.shape[0]):
 		for col in range(second_block.shape[1]):
 			if second_block[row, col, 0] == -1:
 				continue
-			row_combined = row + row_shift
-			col_combined = col + col_shift
+			row_combined = row + second_row_shift
+			col_combined = col + second_col_shift
 			try:
 				if combined_block[row_combined, col_combined, 0] == -1:
 					combined_block[row_combined, col_combined] = second_block[row, col]
@@ -355,8 +395,8 @@ def jigsaw_kruskals(graph: np.ndarray, patches: list = None) -> np.ndarray:
 				graph[a, b, r] = INFINITY
 				continue
 			if patches is not None:
-				show_image(assemble_image(patches, first_block), "first")
-				show_image(assemble_image(patches, second_block), "second")
+				# show_image(assemble_image(patches, first_block), f"first : r = {r}")
+				# show_image(assemble_image(patches, second_block), "second")
 				show_image(assemble_image(patches, combined_block), f"combined, score: {str(graph[a, b, r])}")
 			# adjust our data for next iteration
 			if second_block_index < first_block_index:
@@ -413,10 +453,10 @@ if __name__ == "__main__":
 	show_image(original_image)
 	# ps = original_image.shape[1] // 3
 	ps = 28
-	patch_list = scramble_image(original_image, ps, 4)
+	patch_list = scramble_image(original_image, ps)
 	show_image(assemble_patches(patch_list, original_image.shape[1] // ps))
 	adjacency_matrix = build_graph_from_nn(patch_list, "./patch_pair_boolean_net.pth")
-	reconstruction_matrix = jigsaw_kruskals(adjacency_matrix, patch_list)
+	reconstruction_matrix = jigsaw_kruskals(adjacency_matrix)
 	valid = verify_reconstruction_matrix(reconstruction_matrix, len(patch_list))
 	print(f"reconstruction_matrix valid: {valid}")
 	if valid:
