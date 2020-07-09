@@ -1,4 +1,5 @@
 import copy
+import datetime
 from typing import Union
 import cv2
 import matplotlib.pyplot as plt
@@ -425,6 +426,24 @@ def jigsaw_kruskals(graph: np.ndarray) -> np.ndarray:
 	return sections[0][1]
 
 
+def jigsaw_prims(patches: list) -> np.ndarray:
+	"""
+	takes a list of square patches and uses prim's algorithm to assemble the patches
+	:param patches: a list of numpy arrays representing the scrambled patches of the original image
+	:return: the re-assembled image as a numpy array of shape (x, y, 3)
+	"""
+	patches = copy.copy(patches)
+	# pull the start patch out and place it in the assembled image
+	# while the list of remaining patches isn't empty, pull out the next best option and place it
+
+	# to place the next best option:
+	# for each empty spot adjacent to a placed image, try putting each unused patch in each possible orientation
+	# for each of those options, give it a score accounting for all of its neighbors
+	# whichever of all the options has the best score is the one that gets placed
+	# TODO
+	pass
+
+
 def assemble_image(patches: list, construction_matrix: np.ndarray) -> Union[None, np.ndarray]:
 	"""
 	takes a list of patches and a reconstruction matrix to assemble the patches
@@ -490,22 +509,18 @@ def compare_images(image1: np.ndarray, image2: np.ndarray):
 
 
 if __name__ == "__main__":
-	original_image = load_image_from_disk("TestImages/funny.png")
+	original_image = load_image_from_disk("TestImages/Giraffe.jpg")
 	show_image(original_image)
 	# ps = original_image.shape[1] // 3
 	ps = 28
 	patch_list = scramble_image(original_image, ps)
 	show_image(assemble_patches(patch_list, original_image.shape[1] // ps))
-	# adjacency_matrix = build_graph_from_nn(patch_list, "./patch_pair_boolean_net.pth")
-	adjacency_matrix = build_graph(patch_list)
-	reconstruction_matrix = jigsaw_kruskals(adjacency_matrix)
-	valid = verify_reconstruction_matrix(reconstruction_matrix, len(patch_list))
-	print(f"reconstruction_matrix valid: {valid}")
-	if valid:
-		reconstructed_image = assemble_image(patch_list, reconstruction_matrix)
-		if reconstructed_image is not None:
-			show_image(reconstructed_image)
-			for rotation in range(4):
-				compare_images(original_image, np.rot90(reconstructed_image, rotation))
-		else:
-			print("reconstructed_image is None")
+	print(f"algorithm start time: {datetime.datetime.now()}")
+	reconstructed_image = jigsaw_prims(patch_list)
+	print(f"algorithm end time: {datetime.datetime.now()}")
+	if reconstructed_image is not None:
+		show_image(reconstructed_image)
+		for rotation in range(4):
+			compare_images(original_image, np.rot90(reconstructed_image, rotation))
+	else:
+		print("reconstructed_image is None")
