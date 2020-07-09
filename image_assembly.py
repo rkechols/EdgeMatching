@@ -372,7 +372,6 @@ def jigsaw_kruskals(graph: np.ndarray) -> np.ndarray:
 	:return: a numpy array of shape (r, c, 2). the value at [i, j, 0] gives the index of the patch that should be located
 	in that slot, and [i, j, 1] gives the rotation index of that patch
 	"""
-	graph = copy.copy(graph)
 	n = graph.shape[0]
 	assert graph.shape[1] == n
 	for x in range(n):
@@ -491,7 +490,7 @@ def compare_images(image1: np.ndarray, image2: np.ndarray):
 
 
 if __name__ == "__main__":
-	original_image = load_image_from_disk("TestImages/Thanos.png")
+	original_image = load_image_from_disk("TestImages/funny.png")
 	show_image(original_image)
 	# ps = original_image.shape[1] // 3
 	ps = 28
