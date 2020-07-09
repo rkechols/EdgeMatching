@@ -2,6 +2,7 @@ import copy
 from typing import Union
 import cv2
 import matplotlib.pyplot as plt
+import multiprocessing as mp
 import numpy as np
 import random
 from PatchPairBoolNet import PatchPairBoolNet
@@ -197,7 +198,52 @@ def boring_score(combo_patch: np.ndarray) -> float:
 			diff_array = abs(combo_patch[:(-1 * vertical_shift), seam_index, :] - combo_patch[vertical_shift:, seam_index, :])
 			diffs += list(diff_array.flatten())
 	# average list at the end
-	return 255 - (sum(diffs) / len(diffs))
+	score = 255 - (sum(diffs) / len(diffs))
+	return score
+
+
+def combo_score_mp(coord_and_patches: tuple) -> (tuple, float):
+	(i, j, c), patch1, patch2, functions = coord_and_patches
+	combined = combine_patches(patch1, patch2, c).astype(int)
+	if i == j:
+		score = INFINITY
+	else:
+		score = 0
+		for f in functions:
+			score += f(combined)
+	return (i, j, c), score
+
+
+class PatchPairGenerator:
+	def __init__(self, patches: list, functions: list):
+		self.patches = patches
+		self.functions = functions
+
+	def __iter__(self):
+		for i, patch1 in enumerate(self.patches):
+			for j, patch2 in enumerate(self.patches):
+				for c in range(16):
+					yield (i, j, c), patch1, patch2, self.functions
+
+	def __len__(self):
+		n = len(self.patches)
+		return n * n * 16
+
+
+def fill_score_matrix(patches: list, functions: list) -> np.ndarray:
+	n = len(patches)
+	score_matrix = np.empty((n, n, 16), dtype=float)
+	with mp.Pool() as pool:
+		gen = PatchPairGenerator(patches, functions)
+		score_count = len(gen)
+		result_generator = pool.imap_unordered(combo_score_mp, gen)
+		complete_count = 0
+		for (i, j, c), score in result_generator:
+			score_matrix[i, j, c] = score
+			complete_count += 1
+			if complete_count % 15000 == 0:
+				print(f"completed {complete_count} of {score_count} scores ({(100 * complete_count) // score_count}%)")
+	return score_matrix
 
 
 def build_graph(patches: list) -> np.ndarray:
@@ -207,40 +253,7 @@ def build_graph(patches: list) -> np.ndarray:
 	:return: a numpy array of shape (n, n, 16). the value at [i, j, c] indicates how dissimilar patch i and patch j are
 	along their shared edge when using combination index c
 	"""
-	n = len(patches)
-	# calculate boring scores
-	boring_scores = np.empty((n, n, 16), dtype=float)
-	for i, patch1 in enumerate(patches):
-		for j, patch2 in enumerate(patches):
-			for c in range(16):
-				combined = combine_patches(patch1, patch2, c).astype(int)
-				boring_scores[i, j, c] = boring_score(combined)
-	# normalize boring scores
-	b_min = np.amin(boring_scores)
-	b_max = np.amax(boring_scores)
-	print(f"before normalization... min: {b_min}\t\tmax: {b_max}")
-	boring_scores_normalized = ((boring_scores - b_min) / (b_max - b_min)) * 255
-	print(f"normalized min: {np.amin(boring_scores_normalized)}")
-	print(f"normalized max: {np.amax(boring_scores_normalized)}")
-	# calculate dissimilarity scores and add them to boring scores
-	pairing_scores = np.empty((n, n, 16), dtype=float)
-	# "for each" loop that gives you the index
-	for i, patch1 in enumerate(patches):
-		for j, patch2 in enumerate(patches):
-			for c in range(16):
-				if i == j:
-					pairing_scores[i, j, c] = INFINITY
-					continue
-				combined = combine_patches(patch1, patch2, c).astype(int)
-				d_score = dissimilarity_score(combined)
-				b_score = boring_scores_normalized[i, j, c]
-				score = d_score + b_score
-				# show_image(combined, f"d_score: {d_score}\t\tb_score: {b_score}\t\tnet: {score}")
-				if d_score < 10:
-					pairing_scores[i, j, c] = d_score
-				else:
-					pairing_scores[i, j, c] = score
-	return pairing_scores
+	return fill_score_matrix(patches, [boring_score, dissimilarity_score])
 
 
 def build_graph_from_nn(patches: list, nn_path: str) -> np.ndarray:
@@ -254,7 +267,6 @@ def build_graph_from_nn(patches: list, nn_path: str) -> np.ndarray:
 	pairing_scores = np.empty((n, n, 16), dtype=float)
 	# "for each" loop that gives you the index
 	for i, patch1 in enumerate(patches):
-		print(f"round {i} of {len(patches)}")
 		for j, patch2 in enumerate(patches):
 			for c in range(16):
 				if i == j:
@@ -263,6 +275,8 @@ def build_graph_from_nn(patches: list, nn_path: str) -> np.ndarray:
 				combined = combine_patches(patch1, patch2, c)
 				score = net.forward_numpy(combined, device)
 				pairing_scores[i, j, c] = score
+		if (i + 1) % 5 == 0:
+			print(f"completed {i + 1} of {n} patches' scores ({(100 * (i + 1)) // n}")
 	return pairing_scores
 
 
@@ -447,14 +461,44 @@ def assemble_image(patches: list, construction_matrix: np.ndarray) -> Union[None
 	return assembled
 
 
+def compare_images(image1: np.ndarray, image2: np.ndarray):
+	red_pixel = np.array([205, 0, 0])
+	green_pixel = np.array([0, 205, 40])
+	if image1.shape != image2.shape:
+		print("shapes not the same!")
+		print(f"image1: {image1.shape}")
+		print(f"image2: {image2.shape}")
+	full_height = max(image1.shape[0], image2.shape[0])
+	inner_height = min(image1.shape[0], image2.shape[0])
+	full_width = max(image1.shape[1], image2.shape[1])
+	inner_width = min(image1.shape[1], image2.shape[1])
+	to_show = np.empty((full_height, full_width, 3), dtype=int)
+	for i in range(to_show.shape[0]):
+		for j in range(to_show.shape[1]):
+			if i >= inner_height or j >= inner_width:
+				to_show[i, j, :] = red_pixel
+				continue
+			identical = True
+			for c in range(3):
+				if image1[i, j, c] != image2[i, j, c]:
+					identical = False
+					break
+			if identical:
+				to_show[i, j, :] = green_pixel
+			else:
+				to_show[i, j, :] = red_pixel
+	show_image(to_show)
+
+
 if __name__ == "__main__":
-	original_image = load_image_from_disk("TestImages/Strange.png")
+	original_image = load_image_from_disk("TestImages/Thanos.png")
 	show_image(original_image)
 	# ps = original_image.shape[1] // 3
 	ps = 28
 	patch_list = scramble_image(original_image, ps)
 	show_image(assemble_patches(patch_list, original_image.shape[1] // ps))
-	adjacency_matrix = build_graph_from_nn(patch_list, "./patch_pair_boolean_net.pth")
+	# adjacency_matrix = build_graph_from_nn(patch_list, "./patch_pair_boolean_net.pth")
+	adjacency_matrix = build_graph(patch_list)
 	reconstruction_matrix = jigsaw_kruskals(adjacency_matrix)
 	valid = verify_reconstruction_matrix(reconstruction_matrix, len(patch_list))
 	print(f"reconstruction_matrix valid: {valid}")
@@ -462,5 +506,7 @@ if __name__ == "__main__":
 		reconstructed_image = assemble_image(patch_list, reconstruction_matrix)
 		if reconstructed_image is not None:
 			show_image(reconstructed_image)
+			for rotation in range(4):
+				compare_images(original_image, np.rot90(reconstructed_image, rotation))
 		else:
 			print("reconstructed_image is None")
