@@ -8,7 +8,7 @@ import numpy as np
 import random
 from PatchPairBoolNet import PatchPairBoolNet
 from tqdm import tqdm
-import torch
+# import torch
 
 
 INFINITY = float("inf")
@@ -256,28 +256,28 @@ def build_graph(patches: list) -> np.ndarray:
 	return fill_score_matrix(patches, [boring_score, dissimilarity_score])
 
 
-def build_graph_from_nn(patches: list, nn_path: str) -> np.ndarray:
-	# get the nn set up
-	net = PatchPairBoolNet()
-	net.load_state_dict(torch.load(nn_path))
-	device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-	net.to(device)
-	# get all the scores using the net
-	n = len(patches)
-	pairing_scores = np.empty((n, n, 16), dtype=float)
-	# "for each" loop that gives you the index
-	for i, patch1 in enumerate(patches):
-		for j, patch2 in enumerate(patches):
-			for c in range(16):
-				if i == j:
-					pairing_scores[i, j, c] = INFINITY
-					continue
-				combined = combine_patches(patch1, patch2, c)
-				score = net.forward_numpy(combined, device)
-				pairing_scores[i, j, c] = score
-		if (i + 1) % 5 == 0:
-			print(f"completed {i + 1} of {n} patches' scores ({(100 * (i + 1)) // n}")
-	return pairing_scores
+# def build_graph_from_nn(patches: list, nn_path: str) -> np.ndarray:
+# 	# get the nn set up
+# 	net = PatchPairBoolNet()
+# 	net.load_state_dict(torch.load(nn_path))
+# 	device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+# 	net.to(device)
+# 	# get all the scores using the net
+# 	n = len(patches)
+# 	pairing_scores = np.empty((n, n, 16), dtype=float)
+# 	# "for each" loop that gives you the index
+# 	for i, patch1 in enumerate(patches):
+# 		for j, patch2 in enumerate(patches):
+# 			for c in range(16):
+# 				if i == j:
+# 					pairing_scores[i, j, c] = INFINITY
+# 					continue
+# 				combined = combine_patches(patch1, patch2, c)
+# 				score = net.forward_numpy(combined, device)
+# 				pairing_scores[i, j, c] = score
+# 		if (i + 1) % 5 == 0:
+# 			print(f"completed {i + 1} of {n} patches' scores ({(100 * (i + 1)) // n}")
+# 	return pairing_scores
 
 
 def coord_rot90(row: int, col: int, m: int, n: int, r: int = 1) -> (int, int):
