@@ -1,4 +1,3 @@
-import copy
 from typing import Union
 import cv2
 import matplotlib.pyplot as plt
@@ -6,6 +5,7 @@ import multiprocessing as mp
 import numpy as np
 import random
 from PatchPairBoolNet import PatchPairBoolNet
+from tqdm import tqdm
 import torch
 
 
@@ -237,12 +237,10 @@ def fill_score_matrix(patches: list, functions: list) -> np.ndarray:
 		gen = PatchPairGenerator(patches, functions)
 		score_count = len(gen)
 		result_generator = pool.imap_unordered(combo_score_mp, gen)
-		complete_count = 0
-		for (i, j, c), score in result_generator:
-			score_matrix[i, j, c] = score
-			complete_count += 1
-			if complete_count % 15000 == 0:
-				print(f"completed {complete_count} of {score_count} scores ({(100 * complete_count) // score_count}%)")
+		with tqdm(total=score_count) as progress_bar:
+			for (i, j, c), score in result_generator:
+				score_matrix[i, j, c] = score
+				progress_bar.update()
 	return score_matrix
 
 
@@ -463,10 +461,6 @@ def assemble_image(patches: list, construction_matrix: np.ndarray) -> Union[None
 def compare_images(image1: np.ndarray, image2: np.ndarray):
 	red_pixel = np.array([205, 0, 0])
 	green_pixel = np.array([0, 205, 40])
-	if image1.shape != image2.shape:
-		print("shapes not the same!")
-		print(f"image1: {image1.shape}")
-		print(f"image2: {image2.shape}")
 	full_height = max(image1.shape[0], image2.shape[0])
 	inner_height = min(image1.shape[0], image2.shape[0])
 	full_width = max(image1.shape[1], image2.shape[1])
@@ -493,7 +487,7 @@ if __name__ == "__main__":
 	original_image = load_image_from_disk("TestImages/funny.png")
 	show_image(original_image)
 	# ps = original_image.shape[1] // 3
-	ps = 28
+	ps = 100
 	patch_list = scramble_image(original_image, ps)
 	show_image(assemble_patches(patch_list, original_image.shape[1] // ps))
 	# adjacency_matrix = build_graph_from_nn(patch_list, "./patch_pair_boolean_net.pth")
