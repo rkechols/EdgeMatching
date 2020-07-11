@@ -19,6 +19,11 @@ ROTATION_90 = 1
 ROTATION_180 = 2
 ROTATION_270 = 3
 
+# enum-like values for piece values in reconstruction matrices
+YES_PIECE = 1
+EXPANSION_SPACE = 0
+NO_PIECE = -1
+
 
 def verify_reconstruction_matrix(matrix: np.ndarray, n: int) -> bool:
 	passes = True
@@ -119,7 +124,7 @@ def rotations_from_combination_index(combination_index: int) -> (int, int):
 	return rotation1, rotation2
 
 
-def combine_patches(patch1: np.ndarray, patch2: np.ndarray, combination_index: int) -> np.ndarray:
+def combine_patches(patch1: np.ndarray, patch2: np.ndarray, combination_index: int = 0) -> np.ndarray:
 	"""
 	takes two image patches and
 	:param patch1: the left/first patch to be combined with shape (x, x, 3)
@@ -347,16 +352,16 @@ def combine_blocks(first_block: np.ndarray, second_block: np.ndarray, a: int, b:
 		width = max(first_col_shift + first_block.shape[1], second_block.shape[1])
 	# combine the blocks, if we can
 	combined_block = np.empty((height, width, 2), dtype=first_block.dtype)
-	combined_block[:, :, :] = -1
+	combined_block[:, :, :] = NO_PIECE
 	combined_block[first_row_shift:(first_block.shape[0] + first_row_shift), first_col_shift:(first_block.shape[1] + first_col_shift), :] = first_block
 	for row in range(second_block.shape[0]):
 		for col in range(second_block.shape[1]):
-			if second_block[row, col, 0] == -1:
+			if second_block[row, col, 0] == NO_PIECE:
 				continue
 			row_combined = row + second_row_shift
 			col_combined = col + second_col_shift
 			try:
-				if combined_block[row_combined, col_combined, 0] == -1:
+				if combined_block[row_combined, col_combined, 0] == NO_PIECE:
 					combined_block[row_combined, col_combined] = second_block[row, col]
 				else:  # found a conflict
 					return None
@@ -425,15 +430,86 @@ def jigsaw_kruskals(graph: np.ndarray) -> np.ndarray:
 	return sections[0][1]
 
 
+def find_expansion_spaces(construction_matrix: np.ndarray) -> list:
+	unzipped_coordinates = np.where(construction_matrix == EXPANSION_SPACE)
+	return list(zip(unzipped_coordinates[0], unzipped_coordinates[1]))
+
+
+def prims_placement_score(construction_matrix: np.ndarray, assembled_image: np.ndarray, patch_to_place: np.ndarray, row: int, col: int) -> float:
+	patch_size = patch_to_place.shape[0]
+	neighbors = list()
+	for row_shift in [-1, 1]:
+		neighbor_row = row + row_shift
+		if 0 <= neighbor_row < construction_matrix.shape[0]:
+			if construction_matrix[neighbor_row, col] == YES_PIECE:
+				neighbors.append((neighbor_row, col))
+	for col_shift in [-1, 1]:
+		neighbor_col = col + col_shift
+		if 0 <= neighbor_col < construction_matrix.shape[1]:
+			if construction_matrix[row, neighbor_col] == YES_PIECE:
+				neighbors.append((row, neighbor_col))
+	if len(neighbors) == 0:
+		raise RuntimeError("prims_placement_score could not find a neighbor")
+	neighbor_scores = list()
+	for neighbor_row, neighbor_col in neighbors:
+		# pull the neighbor patch out of the image
+		neighbor_patch = assembled_image[(patch_size * neighbor_row):(patch_size * (neighbor_row + 1)), (patch_size * neighbor_col):(patch_size * (neighbor_col + 1)), :]
+		# combine them horizontally so we can give them to the scoring function
+		if neighbor_row < row:  # neighbor is above
+			combined = combine_patches(np.rot90(neighbor_patch), np.rot90(patch_to_place))
+		elif neighbor_row > row:  # neighbor is below
+			combined = combine_patches(np.rot90(patch_to_place), np.rot90(neighbor_patch))
+		elif neighbor_col < col:  # neighbor is left
+			combined = combine_patches(neighbor_patch, patch_to_place)
+		elif neighbor_col > col:  # neighbor is right
+			combined = combine_patches(patch_to_place, neighbor_patch)
+		else:
+			raise RuntimeError(f"prims_placement_score picked a weird neighbor...? original = ({row},{col}), neighbor = ({neighbor_row},{neighbor_col}")
+		# get the actual score
+		score = dissimilarity_score(combined) + boring_score(combined)
+		neighbor_scores.append(score)
+	# average the score from all of the neighbors
+	return sum(neighbor_scores) / len(neighbor_scores)
+
+
 def jigsaw_prims(patches: list) -> np.ndarray:
 	"""
 	takes a list of square patches and uses prim's algorithm to assemble the patches
 	:param patches: a list of numpy arrays representing the scrambled patches of the original image
 	:return: the re-assembled image as a numpy array of shape (x, y, 3)
 	"""
-	patches = copy.copy(patches)
+	n = len(patches)
+	patches_available = list(range(n))
+	# figure out the patch size
+	patch_size = patches[0].shape[0]
+	# a matrix to store scores already calculated
+	scores_matrix = np.empty((3, 3, n, 4), dtype=float)
+	scores_matrix[:, :, :, :] = INFINITY
+	# a matrix to store which slots have pieces
+	construction_matrix = np.array([[NO_PIECE, EXPANSION_SPACE, NO_PIECE], [EXPANSION_SPACE, YES_PIECE, EXPANSION_SPACE], [NO_PIECE, EXPANSION_SPACE, NO_PIECE]])
+	# an array holding the actual pixel values (starts at all black)
+	assembled_image = np.zeros((patch_size * 3, patch_size * 3, 3), dtype=int)
 	# pull the start patch out and place it in the assembled image
+	assembled_image[patch_size:(2 * patch_size), patch_size:(2 * patch_size), :] = patches[0]
+	patches_available.remove(0)
 	# while the list of remaining patches isn't empty, pull out the next best option and place it
+	while len(patches_available) > 1:
+		# find places we could put a piece
+		expansion_spaces = find_expansion_spaces(construction_matrix)
+		# make sure they all have scores
+		for row, col in expansion_spaces:
+			for patch_index in patches_available:
+				for i in range(4):
+					if scores_matrix[row, col, patch_index, i] == INFINITY:
+						patch_to_place = np.rot90(patches[patch_index], i)
+						scores_matrix[row, col, patch_index, i] = prims_placement_score(construction_matrix, assembled_image, patch_to_place, row, col)
+		# find the placement of the best score
+		min_scores = np.where(scores_matrix == np.amin(scores_matrix))
+		min_scores = list(zip(min_scores[0], min_scores[1], min_scores[2], min_scores[3]))
+		# place the patch
+		for min_score_coordinate in min_scores:
+			break  # TODO
+		break
 
 	# to place the next best option:
 	# for each empty spot adjacent to a placed image, try putting each unused patch in each possible orientation
@@ -507,7 +583,7 @@ if __name__ == "__main__":
 	original_image = load_image_from_disk("TestImages/Giraffe.jpg")
 	show_image(original_image)
 	# ps = original_image.shape[1] // 3
-	ps = 100
+	ps = 28
 	patch_list = scramble_image(original_image, ps)
 	show_image(assemble_patches(patch_list, original_image.shape[1] // ps))
 	print(f"algorithm start time: {datetime.datetime.now()}")
