@@ -1,5 +1,5 @@
-import copy
 import datetime
+import math
 from typing import Union
 import cv2
 import matplotlib.pyplot as plt
@@ -23,6 +23,10 @@ ROTATION_270 = 3
 YES_PIECE = 1
 EXPANSION_SPACE = 0
 NO_PIECE = -1
+
+# globals
+# hypothetical_min = 0
+# hypothetical_max = 255
 
 
 def verify_reconstruction_matrix(matrix: np.ndarray, n: int) -> bool:
@@ -197,6 +201,7 @@ def dissimilarity_score(combo_patch: np.ndarray) -> float:
 
 
 def boring_score(combo_patch: np.ndarray) -> float:
+	patch_size = combo_patch.shape[0]
 	diffs = list()
 	middle_seam_index1 = (combo_patch.shape[1] // 2) - 1
 	middle_seam_index2 = combo_patch.shape[1] // 2
@@ -465,8 +470,11 @@ def prims_placement_score(construction_matrix: np.ndarray, assembled_image: np.n
 			combined = combine_patches(patch_to_place, neighbor_patch)
 		else:
 			raise RuntimeError(f"prims_placement_score picked a weird neighbor...? original = ({row},{col}), neighbor = ({neighbor_row},{neighbor_col}")
-		# get the actual score
-		score = dissimilarity_score(combined) + boring_score(combined)
+		# get the boring score, then normalize it
+		b_score = boring_score(combined)
+		# b_score = 100 * (b_score - hypothetical_min) / (hypothetical_max - hypothetical_min)
+		# add the boring score to the dissimilarity score
+		score = dissimilarity_score(combined) + b_score
 		neighbor_scores.append(score)
 	# average the score from all of the neighbors
 	return sum(neighbor_scores) / len(neighbor_scores)
@@ -491,32 +499,97 @@ def jigsaw_prims(patches: list) -> np.ndarray:
 	assembled_image = np.zeros((patch_size * 3, patch_size * 3, 3), dtype=int)
 	# pull the start patch out and place it in the assembled image
 	assembled_image[patch_size:(2 * patch_size), patch_size:(2 * patch_size), :] = patches[0]
+	show_image(assembled_image)
 	patches_available.remove(0)
 	# while the list of remaining patches isn't empty, pull out the next best option and place it
-	while len(patches_available) > 1:
-		# find places we could put a piece
+	while len(patches_available) > 0:
+		# to place the next best option:
+		# for each empty spot adjacent to a placed patch, try putting each unused patch in each possible orientation
+		# for each of those options, give it a score accounting for all of its neighbors
+		# whichever of all the options has the best score is the one that gets placed
+		# -----
+		# find places where we could put a patch
 		expansion_spaces = find_expansion_spaces(construction_matrix)
+		if len(expansion_spaces) == 0:
+			raise RuntimeError(f"jigsaw_prims could not find any expansion spaces, but there are more patches to place")
 		# make sure they all have scores
 		for row, col in expansion_spaces:
 			for patch_index in patches_available:
-				for i in range(4):
-					if scores_matrix[row, col, patch_index, i] == INFINITY:
-						patch_to_place = np.rot90(patches[patch_index], i)
-						scores_matrix[row, col, patch_index, i] = prims_placement_score(construction_matrix, assembled_image, patch_to_place, row, col)
+				for r in range(4):
+					if scores_matrix[row, col, patch_index, r] == INFINITY:
+						patch_to_place = np.rot90(patches[patch_index], r)
+						# if row == 0 and col == 1 and patch_index == 3 and r == 3:
+						# 	show_image(patch_to_place)
+						# 	show_image(assembled_image)
+						# 	print(construction_matrix)
+						score = prims_placement_score(construction_matrix, assembled_image, patch_to_place, row, col)
+						scores_matrix[row, col, patch_index, r] = score
 		# find the placement of the best score
 		min_scores = np.where(scores_matrix == np.amin(scores_matrix))
 		min_scores = list(zip(min_scores[0], min_scores[1], min_scores[2], min_scores[3]))
-		# place the patch
-		for min_score_coordinate in min_scores:
-			break  # TODO
-		break
-
-	# to place the next best option:
-	# for each empty spot adjacent to a placed image, try putting each unused patch in each possible orientation
-	# for each of those options, give it a score accounting for all of its neighbors
-	# whichever of all the options has the best score is the one that gets placed
-	# TODO
-	pass
+		# place the best patch
+		for row, col, patch_index, r in min_scores:
+			# make sure we picked a piece that hasn't been used yet
+			if patch_index not in patches_available:
+				continue  # shouldn't need this, but just in case
+			patches_available.remove(patch_index)
+			# mark the space as taken; update its neighbors as available for placement
+			construction_matrix[row, col] = YES_PIECE
+			# actually place the patch
+			rotated_patch = np.rot90(patches[patch_index], r)
+			assembled_image[(row * patch_size):((row + 1) * patch_size), (col * patch_size):((col + 1) * patch_size), :] = rotated_patch
+			show_image(assembled_image)
+			# set the place's scores and the patch's scores to infinity to mark them as taken/used
+			scores_matrix[row, col, :, :] = INFINITY
+			scores_matrix[:, :, patch_index, :] = INFINITY
+			# check if we've placed a piece at the edge of the available canvas; expand if we did
+			if row == 0 or row == construction_matrix.shape[0] - 1:
+				new_scores_row = np.empty((1, scores_matrix.shape[1], scores_matrix.shape[2], scores_matrix.shape[3]), dtype=float)
+				new_scores_row[:, :, :, :] = INFINITY
+				new_construction_row = np.empty((1, construction_matrix.shape[1]), dtype=int)
+				new_construction_row[:, :] = NO_PIECE
+				new_image_row = np.zeros((patch_size, assembled_image.shape[1], assembled_image.shape[2]), dtype=int)
+				if row == 0:  # we placed one on the top row
+					scores_matrix = np.concatenate((new_scores_row, scores_matrix), axis=0)
+					construction_matrix = np.concatenate((new_construction_row, construction_matrix), axis=0)
+					assembled_image = np.concatenate((new_image_row, assembled_image), axis=0)
+					row += 1
+				else:  # we placed one on the bottom row
+					scores_matrix = np.concatenate((scores_matrix, new_scores_row), axis=0)
+					construction_matrix = np.concatenate((construction_matrix, new_construction_row), axis=0)
+					assembled_image = np.concatenate((assembled_image, new_image_row), axis=0)
+			if col == 0 or col == construction_matrix.shape[1] - 1:
+				new_scores_col = np.empty((scores_matrix.shape[0], 1, scores_matrix.shape[2], scores_matrix.shape[3]), dtype=float)
+				new_scores_col[:, :, :, :] = INFINITY
+				new_construction_col = np.empty((construction_matrix.shape[0], 1), dtype=int)
+				new_construction_col[:, :] = NO_PIECE
+				new_image_col = np.zeros((assembled_image.shape[0], patch_size, assembled_image.shape[2]), dtype=int)
+				if col == 0:  # we placed one on the left column
+					scores_matrix = np.concatenate((new_scores_col, scores_matrix), axis=1)
+					construction_matrix = np.concatenate((new_construction_col, construction_matrix), axis=1)
+					assembled_image = np.concatenate((new_image_col, assembled_image), axis=1)
+					col += 1
+				else:  # we placed one on the bottom row
+					scores_matrix = np.concatenate((scores_matrix, new_scores_col), axis=1)
+					construction_matrix = np.concatenate((construction_matrix, new_construction_col), axis=1)
+					assembled_image = np.concatenate((assembled_image, new_image_col), axis=1)
+			# check and update the neighbors of the newly placed patch
+			# also reset the adjacent places' scores to infinity so they'll be recalculated accounting for the new piece
+			for row_shift in [-1, 1]:
+				if construction_matrix[row + row_shift, col] == NO_PIECE:
+					construction_matrix[row + row_shift, col] = EXPANSION_SPACE
+				if construction_matrix[row + row_shift, col] == EXPANSION_SPACE:
+					scores_matrix[row + row_shift, col, :, :] = INFINITY
+			for col_shift in [-1, 1]:
+				if construction_matrix[row, col + col_shift] == NO_PIECE:
+					construction_matrix[row, col + col_shift] = EXPANSION_SPACE
+				if construction_matrix[row, col + col_shift] == EXPANSION_SPACE:
+					scores_matrix[row, col + col_shift, :, :] = INFINITY
+			break
+	# trim edges
+	h, w, _ = assembled_image.shape
+	assembled_image = assembled_image[patch_size:(h - patch_size), patch_size:(w - patch_size), :]
+	return assembled_image
 
 
 def assemble_image(patches: list, construction_matrix: np.ndarray) -> Union[None, np.ndarray]:
@@ -582,10 +655,12 @@ def compare_images(image1: np.ndarray, image2: np.ndarray):
 if __name__ == "__main__":
 	original_image = load_image_from_disk("TestImages/Giraffe.jpg")
 	show_image(original_image)
-	# ps = original_image.shape[1] // 3
+	# ps = original_image.shape[1] // 2
 	ps = 28
 	patch_list = scramble_image(original_image, ps)
 	show_image(assemble_patches(patch_list, original_image.shape[1] // ps))
+	# hypothetical_min = 85 + (15.038 * math.log(ps))
+	# hypothetical_max = 255 - (14.235 * math.log(ps))
 	print(f"algorithm start time: {datetime.datetime.now()}")
 	reconstructed_image = jigsaw_prims(patch_list)
 	print(f"algorithm end time: {datetime.datetime.now()}")

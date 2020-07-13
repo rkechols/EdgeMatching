@@ -1,9 +1,10 @@
+import math
 import time
 from unittest import TestCase
 import numpy as np
 import matplotlib.pyplot as plt
 import random
-from image_assembly import assemble_image, build_graph, combine_blocks, jigsaw_kruskals, load_image_from_disk, scramble_image, show_image, assemble_patches, \
+from image_assembly import assemble_image, boring_score, build_graph, combine_blocks, jigsaw_kruskals, load_image_from_disk, scramble_image, show_image, assemble_patches, \
 	verify_reconstruction_matrix
 
 
@@ -86,3 +87,44 @@ class KruskalsTest(TestCase):
 		show_image(assemble_patches(test_patches_shuffled, 2))
 		show_image(actual)
 		self.assertTrue(np.array_equal(original, actual), "reconstructed image is not the same as the original")
+
+	def test_boring_score(self):
+		patch_sizes = [2 + (10 * i) for i in range(11)]
+		min_scores = list()
+		max_scores = list()
+		for patch_size in patch_sizes:
+			# hypothetical_min = 85 + (15.038 * math.log(patch_size))
+			# hypothetical_max = 255 - (14.235 * math.log(patch_size))
+			scores = list()
+			for _ in range(10000):
+				combo_patch = np.random.randint(0, 256, (patch_size, 2 * patch_size, 3))
+				b_score = boring_score(combo_patch)
+				# b_score = 100 * (b_score - hypothetical_min) / (hypothetical_max - hypothetical_min)
+				scores.append(b_score)
+			# find min and max
+			min_scores.append(min(scores))
+			max_scores.append(max(scores))
+			# plot a histogram
+			# plt.hist(scores, bins=50)
+			# plt.title(f"patch size = {patch_size}")
+			# plt.show()
+		# plot the relations between patch size and min/max
+		plt.plot(patch_sizes, min_scores)
+		plt.title(f"min score by patch size")
+		plt.show()
+		plt.plot(patch_sizes, max_scores)
+		plt.title(f"max score by patch size")
+		plt.show()
+		print("patch sizes:")
+		print(patch_sizes)
+		print("min scores:")
+		print(min_scores)
+		print("max scores:")
+		print(max_scores)
+		absolute_min = min(min_scores)
+		absolute_max = max(max_scores)
+		print(f"min = {absolute_min}")
+		print(f"max = {absolute_max}")
+		self.assertTrue(absolute_min >= 0)
+		self.assertTrue(absolute_max < 256)
+
