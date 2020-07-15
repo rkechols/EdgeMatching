@@ -483,11 +483,11 @@ def prims_placement_score(construction_matrix: np.ndarray, assembled_image: np.n
 		else:
 			raise RuntimeError(f"prims_placement_score picked a weird neighbor...? original = ({row},{col}), neighbor = ({neighbor_row},{neighbor_col}")
 		# get the boring score, then normalize it
-		# b_score = boring_score(combined)
+		b_score = boring_score(combined)
 		# b_score = 100 * (b_score - hypothetical_min) / (hypothetical_max - hypothetical_min)
-		# add the boring score to the dissimilarity score
-		# score = dissimilarity_score(combined) + b_score
-		score = kl_score(combined)
+		d_score = dissimilarity_score(combined)
+		k_score = kl_score(combined)
+		score = sum(s * w for s, w in zip([b_score, d_score, k_score], [1.0, 1.0, 50.0]))
 		neighbor_scores.append(score)
 	# average the score from all of the neighbors
 	return sum(neighbor_scores) / len(neighbor_scores)
