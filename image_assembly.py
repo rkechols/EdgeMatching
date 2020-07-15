@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 import multiprocessing as mp
 import numpy as np
 import random
+
+from kldiv import data_to_probability_distribution, kl_divergence_symmetric
 from PatchPairBoolNet import PatchPairBoolNet
 from tqdm import tqdm
 # import torch
@@ -212,6 +214,16 @@ def boring_score(combo_patch: np.ndarray) -> float:
 	# average list at the end
 	score = 255 - (sum(diffs) / len(diffs))
 	return score
+
+
+def kl_score(combo_patch: np.ndarray) -> float:
+	seam_index = combo_patch.shape[1] // 2
+	left = combo_patch[:, :seam_index, :]
+	right = combo_patch[:, seam_index:, :]
+	distributions_left = [data_to_probability_distribution(left[:, :, c], -0.5, 255.5, 64) for c in range(left.shape[2])]
+	distributions_right = [data_to_probability_distribution(right[:, :, c], -0.5, 255.5, 64) for c in range(left.shape[2])]
+	kl_values = [kl_divergence_symmetric(d_left, d_right) for d_left, d_right in zip(distributions_left, distributions_right)]
+	return sum(kl_values)
 
 
 def combo_score_mp(coord_and_patches: tuple) -> (tuple, float):
@@ -471,10 +483,11 @@ def prims_placement_score(construction_matrix: np.ndarray, assembled_image: np.n
 		else:
 			raise RuntimeError(f"prims_placement_score picked a weird neighbor...? original = ({row},{col}), neighbor = ({neighbor_row},{neighbor_col}")
 		# get the boring score, then normalize it
-		b_score = boring_score(combined)
+		# b_score = boring_score(combined)
 		# b_score = 100 * (b_score - hypothetical_min) / (hypothetical_max - hypothetical_min)
 		# add the boring score to the dissimilarity score
-		score = dissimilarity_score(combined) + b_score
+		# score = dissimilarity_score(combined) + b_score
+		score = kl_score(combined)
 		neighbor_scores.append(score)
 	# average the score from all of the neighbors
 	return sum(neighbor_scores) / len(neighbor_scores)
