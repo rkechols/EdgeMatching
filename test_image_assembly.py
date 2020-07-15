@@ -4,7 +4,8 @@ from unittest import TestCase
 import numpy as np
 import matplotlib.pyplot as plt
 import random
-from image_assembly import assemble_image, boring_score, build_graph, combine_blocks, jigsaw_kruskals, load_image_from_disk, scramble_image, show_image, assemble_patches, \
+from image_assembly import assemble_image, boring_score, build_graph, combine_blocks, combine_patches, jigsaw_kruskals, kl_score, load_image_from_disk, scramble_image, show_image, \
+	assemble_patches, \
 	verify_reconstruction_matrix
 
 
@@ -42,6 +43,7 @@ class KruskalsTest(TestCase):
 				space += "\t"
 			print(f"size: {n}{space}average time: {average}")
 		plt.plot(domain, averages)
+		plt.title("time to run jigsaw_kruskals by input size")
 		plt.show()
 
 	def test_load_image_from_disk(self):
@@ -89,6 +91,20 @@ class KruskalsTest(TestCase):
 		self.assertTrue(np.array_equal(original, actual), "reconstructed image is not the same as the original")
 
 	def test_boring_score(self):
+		test_patches = get_test_patches()
+		double_plain = combine_patches(test_patches[0], test_patches[1])
+		double_plain_score = boring_score(double_plain)
+		# show_image(double_plain, f"double_plain: {double_plain_score}")
+		hardly_interesting = combine_patches(test_patches[0], test_patches[1], 10)
+		hardly_interesting_score = boring_score(hardly_interesting)
+		# show_image(hardly_interesting, f"hardly_interesting: {hardly_interesting_score}")
+		fairly_interesting = combine_patches(test_patches[2], test_patches[3], 13)
+		fairly_interesting_score = boring_score(fairly_interesting)
+		# show_image(fairly_interesting, f"fairly_interesting: {fairly_interesting_score}")
+		self.assertLess(fairly_interesting_score, hardly_interesting_score, "a combination with fairly detailed edges should get a lower score than one with hardly detailed edges")
+		self.assertLess(hardly_interesting_score, double_plain_score, "a combination with hardly detailed edges should get a lower score than one with boring/uniform edges")
+
+	def test_boring_score_empirical(self):
 		patch_sizes = [2 + (10 * i) for i in range(11)]
 		min_scores = list()
 		max_scores = list()
@@ -125,6 +141,23 @@ class KruskalsTest(TestCase):
 		absolute_max = max(max_scores)
 		print(f"min = {absolute_min}")
 		print(f"max = {absolute_max}")
-		self.assertTrue(absolute_min >= 0)
-		self.assertTrue(absolute_max < 256)
+		self.assertTrue(absolute_min >= 0, "a score should never go below 0")
+		self.assertTrue(absolute_max < 256, "a score should never go over 255")
 
+	def test_kl_score(self):
+		test_patches = get_test_patches()
+		red_black1 = combine_patches(test_patches[0], test_patches[1])
+		red_black1_score = kl_score(red_black1)
+		show_image(red_black1, f"red_black1: {red_black1_score}")
+		red_black2 = combine_patches(test_patches[0], test_patches[1], 9)
+		red_black2_score = kl_score(red_black2)
+		show_image(red_black2, f"red_black2: {red_black2_score}")
+		self.assertEqual(red_black1_score, red_black2_score, "kl scores should be rotation invariant")
+		red_black3 = combine_patches(test_patches[1], test_patches[0], 9)
+		red_black3_score = kl_score(red_black3)
+		show_image(red_black3, f"red_black3: {red_black3_score}")
+		self.assertEqual(red_black1_score, red_black3_score, "kl scores should be symmetric")
+		blue_blue = combine_patches(test_patches[2], test_patches[3])
+		blue_blue_score = kl_score(blue_blue)
+		show_image(blue_blue, f"blue_blue: {blue_blue_score}")
+		self.assertLess(blue_blue_score, red_black1_score, "a kl score for images of similar color makeup should be lower than that of images that are quite different")

@@ -487,10 +487,15 @@ def prims_placement_score(construction_matrix: np.ndarray, assembled_image: np.n
 		# b_score = 100 * (b_score - hypothetical_min) / (hypothetical_max - hypothetical_min)
 		d_score = dissimilarity_score(combined)
 		k_score = kl_score(combined)
-		score = sum(s * w for s, w in zip([b_score, d_score, k_score], [1.0, 1.0, 50.0]))
+		score = sum(s * w for s, w in zip([b_score, d_score, k_score], [2, 5, 75]))
+		# show_image(combined, str(score))
 		neighbor_scores.append(score)
+	# slightly penalize for having blank neighbors
+	neighbor_scores += ([1.2 * max(neighbor_scores)] * (4 - len(neighbor_scores)))
 	# average the score from all of the neighbors
-	return sum(neighbor_scores) / len(neighbor_scores)
+	to_return = sum(neighbor_scores) / len(neighbor_scores)
+	print(to_return)
+	return to_return
 
 
 def jigsaw_prims(patches: list) -> np.ndarray:
