@@ -1,14 +1,12 @@
 import datetime
-import math
+# import math
 from typing import Union
-import cv2
-import matplotlib.pyplot as plt
 import multiprocessing as mp
 import numpy as np
 import random
-
+from functions import assemble_patches, load_image_from_disk, show_image
 from kldiv import data_to_probability_distribution, kl_divergence_symmetric
-from PatchPairBoolNet import PatchPairBoolNet
+# from PatchPairBoolNet import PatchPairBoolNet
 from tqdm import tqdm
 # import torch
 
@@ -32,6 +30,12 @@ NO_PIECE = -1
 
 
 def verify_reconstruction_matrix(matrix: np.ndarray, n: int) -> bool:
+	"""
+	takes a reconstruction matrix and verifies and a number of patches supposedly contained in it, and verifies that each piece is found and no extras
+	:param matrix: the reconstruction matrix to verify, as a numpy array of shape (x, y, 2)
+	:param n: the number of patches supposedly contained in the reconstruction matrix
+	:return: `True` if the reconstruction matrix contains the needed patch indices on only those, `False` if there are any missing or any extras
+	"""
 	passes = True
 	to_find = set(list(range(n)))
 	flattened = list(matrix[:, :, 0].flatten())
@@ -50,61 +54,6 @@ def verify_reconstruction_matrix(matrix: np.ndarray, n: int) -> bool:
 			print(f"found an unexpected number i the reconstruction matrix: {val}")
 			passes = False
 	return passes
-
-
-def load_image_from_disk(image_file_name: str) -> np.ndarray:
-	"""
-	takes a path to an image file and loads it from disk
-	:param image_file_name: a string indicating which image file to load
-	:return: a numpy array of the image with shape (r, c, 3)
-	"""
-	badly_oriented_image = cv2.imread(image_file_name)
-	return np.fliplr(badly_oriented_image.reshape(-1, 3)).reshape(badly_oriented_image.shape)
-
-
-def show_image(image_rgb: np.ndarray, label: str = None):
-	"""
-	shows an rgb image
-	:param image_rgb: the image to show as a numpy array with shape (r, c, 3)
-	:param label: a label to apply to the image
-	:return: None
-	"""
-	plt.style.use("dark_background")
-	plt.imshow(image_rgb, vmin=0, vmax=255)
-	plt.axis("off")
-	if label is not None:
-		plt.title(label)
-	plt.show()
-
-
-def assemble_patches(patches: list, num_cols: int) -> Union[None, np.ndarray]:
-	n = len(patches)
-	if n == 0:
-		return None
-	patch_size = patches[0].shape[0]  # assumes all are the same size and square
-	num_rows = n // num_cols
-	if n % num_cols != 0:
-		num_rows += 1
-	# tile the patches
-	assembled = np.zeros((num_rows * patch_size, num_cols * patch_size, 3), dtype=patches[0].dtype)
-	for i, patch in enumerate(patches):
-		row = i // num_cols
-		col = i % num_cols
-		start_pixel_row = row * patch_size
-		start_pixel_col = col * patch_size
-		assembled[start_pixel_row:(start_pixel_row + patch_size), start_pixel_col:(start_pixel_col + patch_size), :] = patch
-	return assembled
-
-
-def rotate_random(patch: np.ndarray) -> (np.ndarray, int):
-	"""
-	takes an image patch and returns it at a random rotation
-	:param patch: the image to rotate as a numpy array of shape (r, c, 3)
-	:return: the rotated image as a numpy array
-	"""
-	rotation_index = random.randrange(4)
-	new_patch = np.rot90(patch, rotation_index)
-	return new_patch, rotation_index
 
 
 def combination_index_from_rotations(rotation1: int, rotation2: int) -> int:
@@ -186,6 +135,11 @@ def scramble_image(image: np.ndarray, patch_size: int, seed: int = None) -> list
 
 
 def dissimilarity_score(combo_patch: np.ndarray) -> float:
+	"""
+	takes a pair of square patches and gives a score indicating how dissimilar the patches are at their touching edges
+	:param combo_patch: a numpy array of shape (x, 2x, 3) representing the 2 patches placed next to each other
+	:return: a float in range [0.0, 255.0] (inclusive) representing how dissimilar the patches are at their touching edges. high values mean dissimilar; low values mean similar
+	"""
 	diffs = list()
 	middle_seam_index1 = (combo_patch.shape[1] // 2) - 1
 	middle_seam_index2 = combo_patch.shape[1] // 2
@@ -203,6 +157,11 @@ def dissimilarity_score(combo_patch: np.ndarray) -> float:
 
 
 def boring_score(combo_patch: np.ndarray) -> float:
+	"""
+	takes a pair of square patches and gives a score indicating how boring the patches are at their touching edges. pixel value comparisons are only evaluated parallel to the seam
+	:param combo_patch: a numpy array of shape (x, 2x, 3) representing the 2 patches placed next to each other
+	:return: a float in range [0.0, 255.0] (inclusive) representing how boring the patches are at their touching edges. high values mean boring; low values mean interesting
+	"""
 	patch_size = combo_patch.shape[0]
 	diffs = list()
 	middle_seam_index1 = (combo_patch.shape[1] // 2) - 1
@@ -217,6 +176,11 @@ def boring_score(combo_patch: np.ndarray) -> float:
 
 
 def kl_score(combo_patch: np.ndarray) -> float:
+	"""
+	takes a pair of square patches and gives a score, based on KL divergence, representing how different their overall color distributions are
+	:param combo_patch: a numpy array of shape (x, 2x, 3) representing the 2 patches placed next to each other
+	:return: a float representing how different the overall color distributions are. high values mean dissimilar; low values mean similar
+	"""
 	seam_index = combo_patch.shape[1] // 2
 	left = combo_patch[:, :seam_index, :]
 	right = combo_patch[:, seam_index:, :]
@@ -254,7 +218,14 @@ class PatchPairGenerator:
 		return n * n * 16
 
 
-def fill_score_matrix(patches: list, functions: list) -> np.ndarray:
+def build_graph(patches: list) -> np.ndarray:
+	"""
+	takes a list of scrambled patches and creates an adjacency matrix that gives scores to each possible pairing of patches
+	:param patches: list of square numpy arrays, each of the same shape (x, x, 3); the list's length is referred to as n
+	:return: a numpy array of shape (n, n, 16). the value at [i, j, c] indicates how costly pairing patch i and patch j is when using combination index c.
+	low values mean they are a good pairing; high values mean they are a bad pairing
+	"""
+	functions = [boring_score, dissimilarity_score]
 	n = len(patches)
 	score_matrix = np.empty((n, n, 16), dtype=float)
 	with mp.Pool() as pool:
@@ -268,17 +239,14 @@ def fill_score_matrix(patches: list, functions: list) -> np.ndarray:
 	return score_matrix
 
 
-def build_graph(patches: list) -> np.ndarray:
-	"""
-	takes a list of scrambled patches and creates an adjacency matrix that gives dissimilarity scores
-	:param patches: list of square numpy arrays, each of the same shape (x, x, 3), length n
-	:return: a numpy array of shape (n, n, 16). the value at [i, j, c] indicates how dissimilar patch i and patch j are
-	along their shared edge when using combination index c
-	"""
-	return fill_score_matrix(patches, [boring_score, dissimilarity_score])
-
-
 # def build_graph_from_nn(patches: list, nn_path: str) -> np.ndarray:
+# 	"""
+# 	takes a list of scrambled patches and creates an adjacency matrix that gives scores to each possible pairing of patches. uses a Neural Network to assign scores
+# 	:param patches: list of square numpy arrays, each of the same shape (x, x, 3); the list's length is referred to as n
+# 	:param nn_path: the path to the NN's saved location on disk
+# 	:return: a numpy array of shape (n, n, 16). the value at [i, j, c] indicates how costly pairing patch i and patch j is when using combination index c.
+# 	low values mean they are a good pairing; high values mean they are a bad pairing
+# 	"""
 # 	# get the nn set up
 # 	net = PatchPairBoolNet()
 # 	net.load_state_dict(torch.load(nn_path))
@@ -303,6 +271,15 @@ def build_graph(patches: list) -> np.ndarray:
 
 
 def coord_rot90(row: int, col: int, m: int, n: int, r: int = 1) -> (int, int):
+	"""
+	takes a row index and column index of an element in a 2D array of specified shape and calculates the ending row and column indices ofter the array has been rotated
+	:param row: the row index of the element's starting location
+	:param col: the column index of the element's starting location
+	:param m: the number of rows in the array being rotated
+	:param n: the number of columns in the array being rotated
+	:param r: the number of times the array is rotated 90 degrees counter-clockwise (default value is 1)
+	:return: a tuple of length 2 giving the row and column indices of the element's ending location in the rotated array
+	"""
 	r %= 4
 	if r == 0:
 		return row, col
@@ -315,6 +292,12 @@ def coord_rot90(row: int, col: int, m: int, n: int, r: int = 1) -> (int, int):
 
 
 def block_rot90(block: np.ndarray, r: int) -> np.ndarray:
+	"""
+	takes a subsection of a reconstruction matrix and calculates what it would be after rotation
+	:param block: a subsection of a reconstruction matrix as a numpy array of shape (r, c, 2)
+	:param r: the number of times `block` is rotated 90 degrees counter-clockwise
+	:return: the rotated version of `block` after being rotated
+	"""
 	r %= 4
 	block = np.rot90(block, r)
 	block[:, :, 1] += r
@@ -323,6 +306,15 @@ def block_rot90(block: np.ndarray, r: int) -> np.ndarray:
 
 
 def combine_blocks(first_block: np.ndarray, second_block: np.ndarray, a: int, b: int, r: int) -> Union[None, np.ndarray]:
+	"""
+	takes a two subsections of a reconstruction matrix, two patch indices, and a combination index. returns the combined subsection of a reconstruction matrix (if possible)
+	:param first_block: a subsection of a reconstruction matrix as a numpy array of shape (m, n, 2)
+	:param second_block: a subsection of a reconstruction matrix as a numpy array of shape (r, c, 2)
+	:param a: the value to be found in `first_block` as the attaching point
+	:param b: the value to be found in `second_block` as the attaching point
+	:param r: the combination index (a value in range [0, 15]) indicating how the two attaching points should be rotated as the are placed next to each other
+	:return: the combination of `first_block` and `second_block` as specified as a numpy array of shape (r, c, 2). if the combination is not possible, `None` is returned
+	"""
 	first_block = np.copy(first_block)
 	second_block = np.copy(second_block)
 	# check that the two values are indeed in their blocks, and where
@@ -448,11 +440,26 @@ def jigsaw_kruskals(graph: np.ndarray) -> np.ndarray:
 
 
 def find_expansion_spaces(construction_matrix: np.ndarray) -> list:
+	"""
+	takes a construction matrix as used in `jigsaw_prims` and finds placed marked for expansion
+	:param construction_matrix: a 2-dimensional numpy array containing values of `YES_PIECE`, `NO_PIECE`, or `EXPANSION_SPACE`
+	:return: a list of tuples indicating elements in the array with value of `EXPANSION_SPACE`
+	"""
 	unzipped_coordinates = np.where(construction_matrix == EXPANSION_SPACE)
 	return list(zip(unzipped_coordinates[0], unzipped_coordinates[1]))
 
 
 def prims_placement_score(construction_matrix: np.ndarray, assembled_image: np.ndarray, patch_to_place: np.ndarray, row: int, col: int) -> float:
+	"""
+	takes a construction matrix as used in `jigsaw_prims`, the partially-assembled rgb image that it represents, a patch to place, and the place to put it;
+	gives a score to the hypothetical placement of the patch as specified
+	:param construction_matrix: a 2-dimensional numpy array containing values of `YES_PIECE`, `NO_PIECE`, or `EXPANSION_SPACE`
+	:param assembled_image: the partially-assembled rgb image corresponding to `construction_matrix` as a numpy array of shape (r, c, 3)
+	:param patch_to_place: the square patch to be placed in `assembled_image`, already rotated as it needs to be placed, as a numpy array of shape (x, x, 3)
+	:param row: the index of the row in `construction_matrix` where the patch will be placed
+	:param col: the index of the column in `construction_matrix` where the patch will be placed
+	:return: a score indicating how costly placing the patch is as specified. low values mean it is a good placement; high values mean it is a bad placement
+	"""
 	patch_size = patch_to_place.shape[0]
 	neighbors = list()
 	for row_shift in [-1, 1]:
@@ -646,6 +653,12 @@ def assemble_image(patches: list, construction_matrix: np.ndarray) -> Union[None
 
 
 def compare_images(image1: np.ndarray, image2: np.ndarray):
+	"""
+	takes two rgb images and displays a red/green image of where the two input images have the same pixel values; green pixels mean identical, red pixels mean they differ
+	:param image1: the first image for comparison as a numpy array of shape (m, n, 3)
+	:param image2: the second image for comparison as a numpy array of shape (r, c, 3)
+	:return: None
+	"""
 	red_pixel = np.array([205, 0, 0])
 	green_pixel = np.array([0, 205, 40])
 	full_height = max(image1.shape[0], image2.shape[0])

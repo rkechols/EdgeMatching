@@ -1,15 +1,18 @@
-import math
 import time
 from unittest import TestCase
 import numpy as np
 import matplotlib.pyplot as plt
 import random
-from image_assembly import assemble_image, boring_score, build_graph, combine_blocks, combine_patches, jigsaw_kruskals, kl_score, load_image_from_disk, scramble_image, show_image, \
-	assemble_patches, \
-	verify_reconstruction_matrix
+from functions import load_image_from_disk
+from image_assembly import assemble_image, boring_score, build_graph, combine_patches, jigsaw_kruskals, kl_score, scramble_image, show_image, \
+	assemble_patches, verify_reconstruction_matrix
 
 
 def get_test_patches() -> list:
+	"""
+	loads the test patches image from disk and breaks it into the 4 pieces
+	:return: a list of 4 numpy arrays, each of shape (32, 32, 3)
+	"""
 	all_test_patches = load_image_from_disk("TestImages/TestPatches.png")
 	patch1 = all_test_patches[:32, :32, :]
 	patch2 = all_test_patches[:32, 32:, :]
