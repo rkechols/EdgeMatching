@@ -81,11 +81,11 @@ def compare_images(image1: np.ndarray, image2: np.ndarray):
 
 if __name__ == "__main__":
 	original_image = load_image_from_disk("TestImages/Giraffe.jpg")
-	show_image(original_image)
+	show_image(original_image, "original")
 	# ps = original_image.shape[1] // 2
 	ps = 28
 	patch_list = scramble_image(original_image, ps, 4)
-	show_image(assemble_patches(patch_list, original_image.shape[1] // ps))
+	show_image(assemble_patches(patch_list, original_image.shape[1] // ps), "scrambled")
 	# hypothetical_min = 85 + (15.038 * math.log(ps))
 	# hypothetical_max = 255 - (14.235 * math.log(ps))
 	print(f"algorithm start time: {datetime.datetime.now()}")
@@ -93,7 +93,7 @@ if __name__ == "__main__":
 	reconstructed_image = jigsaw_prims(patch_list)
 	print(f"algorithm end time: {datetime.datetime.now()}")
 	if reconstructed_image is not None:
-		show_image(reconstructed_image)
+		show_image(reconstructed_image, "final answer")
 		for rotation in range(4):
 			compare_images(original_image, np.rot90(reconstructed_image, rotation))
 	else:
