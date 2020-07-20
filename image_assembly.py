@@ -2,6 +2,7 @@ import datetime
 import numpy as np
 import random
 from functions import assemble_patches, load_image_from_disk, show_image
+from kruskal import jigsaw_kruskals
 from prim import jigsaw_prims
 
 
@@ -88,6 +89,7 @@ if __name__ == "__main__":
 	# hypothetical_min = 85 + (15.038 * math.log(ps))
 	# hypothetical_max = 255 - (14.235 * math.log(ps))
 	print(f"algorithm start time: {datetime.datetime.now()}")
+	# reconstructed_image = jigsaw_kruskals(patch_list)
 	reconstructed_image = jigsaw_prims(patch_list)
 	print(f"algorithm end time: {datetime.datetime.now()}")
 	if reconstructed_image is not None:

@@ -3,7 +3,8 @@ import numpy as np
 from tqdm import tqdm
 import multiprocessing as mp
 from constants import *
-from functions import block_rot90, boring_score, combo_score_mp, coord_rot90, dissimilarity_score, PatchPairGenerator, rotations_from_combination_index
+from functions import block_rot90, boring_score, combo_score_mp, coord_rot90, dissimilarity_score, PatchPairGenerator, rotations_from_combination_index, \
+	verify_reconstruction_matrix
 
 
 def combine_blocks(first_block: np.ndarray, second_block: np.ndarray, a: int, b: int, r: int) -> Union[None, np.ndarray]:
@@ -225,3 +226,15 @@ def assemble_image(patches: list, construction_matrix: np.ndarray) -> Union[None
 			# put it in its place
 			assembled[(i * patch_size):(patch_size * (i + 1)), (j * patch_size):(patch_size * (j + 1)), :] = rotated_patch
 	return assembled
+
+
+def jigsaw_kruskals(patches: list):
+	adjacency_matrix = build_graph(patches)
+	reconstruction_matrix = kruskals_reconstruction(adjacency_matrix)
+	valid = verify_reconstruction_matrix(reconstruction_matrix, len(patches))
+	print(f"reconstruction_matrix valid: {valid}")
+	if valid:
+		reconstructed_image = assemble_image(patches, reconstruction_matrix)
+		return reconstructed_image
+	else:
+		return None
