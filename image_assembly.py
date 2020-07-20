@@ -143,14 +143,19 @@ def dissimilarity_score(combo_patch: np.ndarray) -> float:
 	diffs = list()
 	middle_seam_index1 = (combo_patch.shape[1] // 2) - 1
 	middle_seam_index2 = combo_patch.shape[1] // 2
+
+	left_deep = combo_patch[:, middle_seam_index1 - 1, :]
+	left_shallow = combo_patch[:, middle_seam_index1, :]
+	right_shallow = combo_patch[:, middle_seam_index2, :]
+	right_deep = combo_patch[:, middle_seam_index2 + 1, :]
 	# left deep, right shallow
-	diff_array = abs(combo_patch[:, middle_seam_index1 - 1, :] - combo_patch[:, middle_seam_index2, :])
+	diff_array = abs(left_deep - right_shallow)
 	diffs += list(diff_array.flatten())
 	# both shallow
-	diff_array = abs(combo_patch[:, middle_seam_index1, :] - combo_patch[:, middle_seam_index2, :])
+	diff_array = abs(left_shallow - right_shallow)
 	diffs += list(diff_array.flatten())
 	# left shallow, right deep
-	diff_array = abs(combo_patch[:, middle_seam_index1, :] - combo_patch[:, middle_seam_index2 + 1, :])
+	diff_array = abs(left_shallow - right_deep)
 	diffs += list(diff_array.flatten())
 	# average list at the end
 	return sum(diffs) / len(diffs)
@@ -494,14 +499,17 @@ def prims_placement_score(construction_matrix: np.ndarray, assembled_image: np.n
 		# b_score = 100 * (b_score - hypothetical_min) / (hypothetical_max - hypothetical_min)
 		d_score = dissimilarity_score(combined)
 		k_score = kl_score(combined)
-		score = sum(s * w for s, w in zip([b_score, d_score, k_score], [2, 5, 75]))
+		score = sum(s * w for s, w in zip([b_score, d_score, k_score], [0.62, 1.05, 1.0]))
 		# show_image(combined, str(score))
 		neighbor_scores.append(score)
-	# slightly penalize for having blank neighbors
-	neighbor_scores += ([1.2 * max(neighbor_scores)] * (4 - len(neighbor_scores)))
+	# penalize for having blank neighbors to keep it square-ish
+	neighbor_scores += ([20 * max(neighbor_scores)] * (4 - len(neighbor_scores)))
 	# average the score from all of the neighbors
 	to_return = sum(neighbor_scores) / len(neighbor_scores)
-	print(to_return)
+	# show what we've done for debugging
+	# hypothetical_placement = np.copy(assembled_image)
+	# hypothetical_placement[(patch_size * row):(patch_size * (row + 1)), (patch_size * col):(patch_size * (col + 1)), :] = patch_to_place
+	# show_image(hypothetical_placement, str(to_return))
 	return to_return
 
 
@@ -563,7 +571,7 @@ def jigsaw_prims(patches: list) -> np.ndarray:
 			# actually place the patch
 			rotated_patch = np.rot90(patches[patch_index], r)
 			assembled_image[(row * patch_size):((row + 1) * patch_size), (col * patch_size):((col + 1) * patch_size), :] = rotated_patch
-			show_image(assembled_image)
+			show_image(assembled_image, str(scores_matrix[row, col, patch_index, r]))
 			# set the place's scores and the patch's scores to infinity to mark them as taken/used
 			scores_matrix[row, col, :, :] = INFINITY
 			scores_matrix[:, :, patch_index, :] = INFINITY
@@ -688,7 +696,7 @@ if __name__ == "__main__":
 	show_image(original_image)
 	# ps = original_image.shape[1] // 2
 	ps = 28
-	patch_list = scramble_image(original_image, ps)
+	patch_list = scramble_image(original_image, ps, 4)
 	show_image(assemble_patches(patch_list, original_image.shape[1] // ps))
 	# hypothetical_min = 85 + (15.038 * math.log(ps))
 	# hypothetical_max = 255 - (14.235 * math.log(ps))
