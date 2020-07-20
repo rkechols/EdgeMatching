@@ -499,7 +499,7 @@ def prims_placement_score(construction_matrix: np.ndarray, assembled_image: np.n
 		# b_score = 100 * (b_score - hypothetical_min) / (hypothetical_max - hypothetical_min)
 		d_score = dissimilarity_score(combined)
 		k_score = kl_score(combined)
-		score = sum(s * w for s, w in zip([b_score, d_score, k_score], [0.62, 1.05, 1.0]))
+		score = sum(s * w for s, w in zip([b_score, d_score, k_score], [0.61, 1.05, 1.1]))
 		# show_image(combined, str(score))
 		neighbor_scores.append(score)
 	# penalize for having blank neighbors to keep it square-ish
