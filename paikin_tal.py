@@ -96,18 +96,18 @@ def get_dissimilarity_scores(patches: list) -> np.ndarray:
 	return score_matrix
 
 
-def compatibility_score(dissimilarity_matrix: np.ndarray, patch1_index: int, patch1_r: int, patch2_index: int, patch2_r: int) -> float:
+def compatibility_score(dissimilarity_scores: np.ndarray, patch1_index: int, patch1_r: int, patch2_index: int, patch2_r: int) -> float:
 	"""
 	takes a matrix of all dissimilarity scores plus a particular combination of patches and gives the asymmetric compatibility score of that combination
-	:param dissimilarity_matrix: the matrix of all dissimilarity scores as a numpy array of shape (n, 4, n, 4), where n is the total number of patches
+	:param dissimilarity_scores: the matrix of all dissimilarity scores as a numpy array of shape (n, 4, n, 4), where n is the total number of patches
 	:param patch1_index: the index referring to the first/left patch
 	:param patch1_r: an int in range [0, 3] indicating how far the first/left patch has been rotated
 	:param patch2_index: the index referring to the second/right patch
 	:param patch2_r: an int in range [0, 3] indicating how far the second/right patch has been rotated
 	:return: the asymmetric compatibility score of the two pieces
 	"""
-	d_score = dissimilarity_matrix[patch1_index, patch1_r, patch2_index, patch2_r]
-	relevant_slice = dissimilarity_matrix[patch1_index, patch1_r, :, :]
+	d_score = dissimilarity_scores[patch1_index, patch1_r, patch2_index, patch2_r]
+	relevant_slice = dissimilarity_scores[patch1_index, patch1_r, :, :]
 	next_best_d_score = np.amin(relevant_slice[relevant_slice > d_score])  # if there is no second-best, this will raise a ValueError
 	return 1.0 - (d_score / next_best_d_score)
 
@@ -158,21 +158,28 @@ def get_compatibility_scores(dissimilarity_scores: np.ndarray) -> np.ndarray:
 	return score_matrix
 
 
-def get_best_buddies(compatibility_matrix: np.ndarray) -> np.ndarray:
+def get_best_buddies(compatibility_scores: np.ndarray) -> np.ndarray:
 	"""
 	takes a matrix of compatibility scores and gives a matrix of best buddies
-	:param compatibility_matrix: the matrix of all compatibility scores as a numpy array of shape (n, 4, n, 4), where n is the total number of patches
+	:param compatibility_scores: the matrix of all compatibility scores as a numpy array of shape (n, 4, n, 4), where n is the total number of patches
 	:return: a matrix indicating best buddies for each edge of each patch, as a numpy array of shape (n, 4). the value at [i, r1] is a tuple indicating the best buddy for patch i
 	when rotated r1 times. the tuple is of form (j, r2), indicating that patch j is the best buddy when rotated r2 times. if there is a value of `None` in place of a tuple, then
 	patch i has no best buddy
 	"""
-	n = compatibility_matrix.shape[0]
+	n = compatibility_scores.shape[0]
 	buddy_matrix = np.empty((n, 4), dtype=tuple)
 	# TODO: actually figure out best buddies
 	return buddy_matrix
 
 
-def pick_first_piece() -> int:
+def pick_first_piece(buddy_matrix: np.ndarray, compatibility_scores: np.ndarray) -> int:
+	"""
+	takes info about best buddies and compatibility scores and selects the first piece to be placed
+	:param buddy_matrix: the matrix indicating the best buddy of each piece, if any, as a numpy of shape (n, 4) containing tuples of form (piece_index, rotation_index)
+	:param compatibility_scores: the matrix of all compatibility scores as a numpy array of shape (n, 4, n, 4), where n is the total number of patches
+	:return: the index of the patch that is selected as our first piece to place
+	"""
+	# TODO
 	pass
 
 
@@ -182,7 +189,9 @@ def jigsaw_pt(patches: list):
 	:param patches: a list of numpy arrays representing the scrambled patches of the original image
 	:return: the re-assembled image as a numpy array of shape (r, c, 3)
 	"""
+	# TODO: actually implement the algorithm
 	dissimilarity_scores = get_dissimilarity_scores(patches)
 	compatibility_scores = get_compatibility_scores(dissimilarity_scores)
-	# TODO: implement the rest of the algorithm
+	buddy_matrix = get_best_buddies(compatibility_scores)
+	first_piece = pick_first_piece(buddy_matrix, compatibility_scores)
 	return None
