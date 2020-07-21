@@ -3,8 +3,35 @@ import numpy as np
 from tqdm import tqdm
 import multiprocessing as mp
 from constants import *
-from functions import block_rot90, boring_score, combo_score_mp, coord_rot90, dissimilarity_score, PatchPairGenerator, rotations_from_combination_index, \
-	verify_reconstruction_matrix
+from functions import block_rot90, boring_score, combine_patches, coord_rot90, dissimilarity_score, rotations_from_combination_index, verify_reconstruction_matrix
+
+
+def combo_score_mp(coord_and_patches: tuple) -> (tuple, float):
+	(i, j, c), patch1, patch2, functions = coord_and_patches
+	combined = combine_patches(patch1, patch2, c).astype(int)
+	if i == j:
+		score = INFINITY
+	else:
+		score = 0
+		for f in functions:
+			score += f(combined)
+	return (i, j, c), score
+
+
+class PatchPairGenerator:
+	def __init__(self, patches: list, functions: list):
+		self.patches = patches
+		self.functions = functions
+
+	def __iter__(self):
+		for i, patch1 in enumerate(self.patches):
+			for j, patch2 in enumerate(self.patches):
+				for c in range(16):
+					yield (i, j, c), patch1, patch2, self.functions
+
+	def __len__(self):
+		n = len(self.patches)
+		return n * n * 16
 
 
 def combine_blocks(first_block: np.ndarray, second_block: np.ndarray, a: int, b: int, r: int) -> Union[None, np.ndarray]:

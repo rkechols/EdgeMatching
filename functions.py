@@ -2,7 +2,6 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import random
-from constants import INFINITY
 from typing import Union
 from kldiv import data_to_probability_distribution, kl_divergence_symmetric
 
@@ -234,34 +233,6 @@ def verify_reconstruction_matrix(matrix: np.ndarray, n: int) -> bool:
 			print(f"found an unexpected number i the reconstruction matrix: {val}")
 			passes = False
 	return passes
-
-
-def combo_score_mp(coord_and_patches: tuple) -> (tuple, float):
-	(i, j, c), patch1, patch2, functions = coord_and_patches
-	combined = combine_patches(patch1, patch2, c).astype(int)
-	if i == j:
-		score = INFINITY
-	else:
-		score = 0
-		for f in functions:
-			score += f(combined)
-	return (i, j, c), score
-
-
-class PatchPairGenerator:
-	def __init__(self, patches: list, functions: list):
-		self.patches = patches
-		self.functions = functions
-
-	def __iter__(self):
-		for i, patch1 in enumerate(self.patches):
-			for j, patch2 in enumerate(self.patches):
-				for c in range(16):
-					yield (i, j, c), patch1, patch2, self.functions
-
-	def __len__(self):
-		n = len(self.patches)
-		return n * n * 16
 
 
 def get_test_patches() -> list:
