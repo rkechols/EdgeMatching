@@ -45,34 +45,34 @@ def dissimilarity_score_pt(patch1: np.ndarray, patch2: np.ndarray) -> int:
 	return norm_l1(expected_col, patch2[:, 0, :])
 
 
-def compatibility_score(scores_matrix: np.ndarray, patch1_index: int, patch1_r: int, patch2_index: int, patch2_r: int) -> float:
+def compatibility_score(dissimilarity_matrix: np.ndarray, patch1_index: int, patch1_r: int, patch2_index: int, patch2_r: int) -> float:
 	"""
 	takes a matrix of all dissimilarity scores plus a particular combination of patches and gives the asymmetric compatibility score of that combination
-	:param scores_matrix: the matrix of all dissimilarity scores as a numpy array of shape (n, 4, n, 4), where n is the total number of patches
+	:param dissimilarity_matrix: the matrix of all dissimilarity scores as a numpy array of shape (n, 4, n, 4), where n is the total number of patches
 	:param patch1_index: the index referring to the first/left patch
 	:param patch1_r: an int in range [0, 3] indicating how far the first/left patch has been rotated
 	:param patch2_index: the index referring to the second/right patch
 	:param patch2_r: an int in range [0, 3] indicating how far the second/right patch has been rotated
 	:return: the asymmetric compatibility score of the two pieces
 	"""
-	d_score = scores_matrix[patch1_index, patch1_r, patch2_index, patch2_r]
-	relevant_slice = scores_matrix[patch1_index, patch1_r, :, :]
+	d_score = dissimilarity_matrix[patch1_index, patch1_r, patch2_index, patch2_r]
+	relevant_slice = dissimilarity_matrix[patch1_index, patch1_r, :, :]
 	second_best_d_score = np.amin(relevant_slice[relevant_slice != np.amin(relevant_slice)])
 	return 1.0 - (d_score / second_best_d_score)
 
 
-def compatibility_score_symmetric(scores_matrix: np.ndarray, patch1_index: int, patch1_r: int, patch2_index: int, patch2_r: int) -> float:
+def compatibility_score_symmetric(dissimilarity_matrix: np.ndarray, patch1_index: int, patch1_r: int, patch2_index: int, patch2_r: int) -> float:
 	"""
 	takes a matrix of all dissimilarity scores plus a particular combination of patches and gives the symmetric compatibility (mutual compatibility) score of that combination
-	:param scores_matrix: the matrix of all dissimilarity scores as a numpy array of shape (n, 4, n, 4), where n is the total number of patches
+	:param dissimilarity_matrix: the matrix of all dissimilarity scores as a numpy array of shape (n, 4, n, 4), where n is the total number of patches
 	:param patch1_index: the index referring to the first/left patch
 	:param patch1_r: an int in range [0, 3] indicating how far the first/left patch has been rotated
 	:param patch2_index: the index referring to the second/right patch
 	:param patch2_r: an int in range [0, 3] indicating how far the second/right patch has been rotated
 	:return: the symmetric compatibility (mutual compatibility) score of the two pieces
 	"""
-	c1 = compatibility_score(scores_matrix, patch1_index, patch1_r, patch2_index, patch2_r)
-	c2 = compatibility_score(scores_matrix, patch2_index, patch2_r, patch1_index, patch1_r)
+	c1 = compatibility_score(dissimilarity_matrix, patch1_index, patch1_r, patch2_index, patch2_r)
+	c2 = compatibility_score(dissimilarity_matrix, patch2_index, patch2_r, patch1_index, patch1_r)
 	return (c1 + c2) / 2.0
 
 
