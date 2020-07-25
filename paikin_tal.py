@@ -189,7 +189,7 @@ def jigsaw_pt(patches: list):
 	:param patches: a list of numpy arrays representing the scrambled patches of the original image
 	:return: the re-assembled image as a numpy array of shape (r, c, 3)
 	"""
-	# TODO: actually implement the algorithm
+	# TODO: actually implement the algorithm; these function calls are just examples
 	dissimilarity_scores = get_dissimilarity_scores(patches)
 	compatibility_scores = get_compatibility_scores(dissimilarity_scores)
 	buddy_matrix = get_best_buddies(compatibility_scores)
