@@ -169,6 +169,7 @@ def get_best_buddies(compatibility_scores: np.ndarray) -> np.ndarray:
 	n = compatibility_scores.shape[0]
 	buddy_matrix = np.empty((n, 4), dtype=tuple)
 	# TODO: actually figure out best buddies
+	buddy_matrix[:, :] = None  # this is trash
 	return buddy_matrix
 
 
