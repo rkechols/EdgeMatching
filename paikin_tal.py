@@ -181,7 +181,7 @@ def pick_first_piece(buddy_matrix: np.ndarray, compatibility_scores: np.ndarray)
 	:return: the index of the patch that is selected as our first piece to place
 	"""
 	# TODO
-	pass
+	return -1
 
 
 def jigsaw_pt(patches: list):
