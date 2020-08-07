@@ -109,6 +109,8 @@ def compatibility_score(dissimilarity_scores: np.ndarray, patch1_index: int, pat
 	d_score = dissimilarity_scores[patch1_index, patch1_r, patch2_index, patch2_r]
 	relevant_slice = dissimilarity_scores[patch1_index, patch1_r, :, :]
 	next_best_d_score = np.amin(relevant_slice[relevant_slice > d_score])  # if there is no second-best, this will raise a ValueError
+	if next_best_d_score == INFINITY:
+		return 0.0
 	return 1.0 - (d_score / next_best_d_score)
 
 
@@ -173,16 +175,21 @@ def get_best_buddies(compatibility_scores: np.ndarray) -> np.ndarray:
 	for i in range(n):
 		# rotation index
 		for r1 in range(compatibility_scores.shape[1]):
+			r1_inverse = (r1 + 2) % 4
 			# pull out the block of scores that are relevant
 			region = compatibility_scores[i, r1, :, :]
 			# look for the largest value
 			largest_coordinates = np.where(region == np.amax(region))
 			largest_coordinates = list(zip(largest_coordinates[0], largest_coordinates[1]))
-			print("Largest coordinates:")
-			print(largest_coordinates)
-
-	# see if it's "mutual"
-	# add it to buddy_matrix
+			found_buddy = False
+			for j, r2 in largest_coordinates:
+				print(f"j: {j}\t\tr2: {r2}")
+				# TODO
+				# see if it's "mutual"
+				# if it is, add it to buddy_matrix
+				r2_inverse = (r2 + 2) % 4
+			if not found_buddy:  # none of the values tied for best are a best buddy
+				buddy_matrix[i, r1] = None
 	return buddy_matrix
 
 
