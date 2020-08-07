@@ -1,50 +1,40 @@
 import numpy as np
 from unittest import TestCase
+from constants import INFINITY
 from paikin_tal import get_best_buddies, pick_first_piece
 
 
 class PaikinTalTest(TestCase):
 	def test_get_best_buddies(self):
-		compatibility_scores = np.array(
-			[
-				[
-					[[0, 0, 0, 0], [0, 0, 0, 1], [0, 0, 0, 0]],
-					[[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
-					[[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
-					[[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]
-				],
-				[
-					[[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
-					[[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
-					[[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
-					[[1, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]
-				],
-				[
-					[[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
-					[[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
-					[[0, 0, 0, 0], [1, 0, 0, 0], [0, 0, 0, 0]],
-					[[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]
-				]
-			]
-			, dtype=float
-		)
-		buddies = get_best_buddies(compatibility_scores)
-		# right shape
-		self.assertTupleEqual((3, 4), buddies.shape, "resulting matrix was the wrong shape")
-		# make sure there are no false values
-		for patch_index1 in range(buddies.shape[0]):
-			for r1 in range(buddies.shape[1]):
-				t = buddies[patch_index1, r1]
-				if t is not None:
-					if patch_index1 == 0 and r1 == 0:
-						self.assertTupleEqual(t, (1, 3), f"best buddy listed for {(patch_index1, r1)} was incorrect")
-					elif patch_index1 == 1 and r1 == 3:
-						self.assertTupleEqual(t, (0, 0), f"best buddy listed for {(patch_index1, r1)} was incorrect")
+		for _ in range(1000):  # multiple trials since randomness is involved
+			n = 3
+			compatibility_scores = np.random.uniform(0.0, 0.95, (n, 4, n, 4))
+			for i in range(n):
+				compatibility_scores[i, :, i, :] = -INFINITY
+			compatibility_scores[0, 0, 1, 3] = 1.0
+			compatibility_scores[1, 1, 0, 2] = 1.0
+			compatibility_scores[2, 2, 1, 0] = 1.0
+			buddies = get_best_buddies(compatibility_scores)
+			# right shape
+			self.assertTupleEqual((3, 4), buddies.shape, "resulting matrix was the wrong shape")
+			# make sure there are no false values
+			not_none_count = 0
+			for patch_index1 in range(buddies.shape[0]):
+				for r1 in range(buddies.shape[1]):
+					t = buddies[patch_index1, r1]
+					if t is not None:
+						not_none_count += 1
+						if patch_index1 == 0 and r1 == 0:
+							self.assertTupleEqual(t, (1, 3), f"best buddy listed for {(patch_index1, r1)} was incorrect")
+						elif patch_index1 == 1 and r1 == 1:
+							self.assertTupleEqual(t, (0, 2), f"best buddy listed for {(patch_index1, r1)} was incorrect")
+						else:
+							# verify it's symmetric
+							self.assertEqual((patch_index1, (r1 + 2) % 4), buddies[t[0], (t[1] + 2) % 4], f"found an asymmetric buddy pairing:\n{buddies}")
 					else:
-						self.fail(f"found a non-None tuple (buddy pairing) that should be none: {(patch_index1, r1)} with {t}")
-				else:
-					if (patch_index1 == 0 and r1 == 0) or (patch_index1 == 1 and r1 == 3):
-						self.fail(f"{(patch_index1, r1)} was listed as having no best buddy, but should have a buddy")
+						if (patch_index1 == 0 and r1 == 0) or (patch_index1 == 1 and r1 == 1):
+							self.fail(f"{(patch_index1, r1)} was listed as having no best buddy, but should have a buddy:\n{buddies}")
+			self.assertTrue(not_none_count % 2 == 0, "number of patches with best buddies should be even, since the relation is symmetric but irreflexive")
 
 	def test_pick_first_piece_positive(self):
 		# for a visualization of this test case, see the following: https://1drv.ms/u/s!AsgHxnBnyNbihXfX9GsLzyytvuxm
