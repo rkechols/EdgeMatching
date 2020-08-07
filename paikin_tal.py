@@ -191,8 +191,12 @@ def jigsaw_pt(patches: list):
 	:return: the re-assembled image as a numpy array of shape (r, c, 3)
 	"""
 	# TODO: actually implement the algorithm; these function calls are just examples
+	print("computing dissimilarity scores...")
 	dissimilarity_scores = get_dissimilarity_scores(patches)
+	print("computing initial compatibility scores...")
 	compatibility_scores = get_compatibility_scores(dissimilarity_scores)
+	print("finding initial best buddies...")
 	buddy_matrix = get_best_buddies(compatibility_scores)
+	print("selecting first piece...")
 	first_piece = pick_first_piece(buddy_matrix, compatibility_scores)
 	return None
