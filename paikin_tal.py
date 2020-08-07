@@ -116,7 +116,7 @@ def compatibility_score_mp(coord_and_dissimilarities: tuple) -> (tuple, float):
 	# for use with the multiprocessing library
 	(patch1_index, patch1_r, patch2_index, patch2_r), dissimilarity_scores = coord_and_dissimilarities
 	if patch1_index == patch2_index:
-		score = INFINITY
+		score = -INFINITY
 	else:
 		score = compatibility_score(dissimilarity_scores, patch1_index, patch1_r, patch2_index, patch2_r)
 	return (patch1_index, patch1_r, patch2_index, patch2_r), score
@@ -168,8 +168,21 @@ def get_best_buddies(compatibility_scores: np.ndarray) -> np.ndarray:
 	"""
 	n = compatibility_scores.shape[0]
 	buddy_matrix = np.empty((n, 4), dtype=tuple)
-	# TODO: actually figure out best buddies
-	buddy_matrix[:, :] = None  # this is trash
+	# look at each piece in each rotation, find its best neighbor
+	# piece we are looking at
+	for i in range(n):
+		# rotation index
+		for r1 in range(compatibility_scores.shape[1]):
+			# pull out the block of scores that are relevant
+			region = compatibility_scores[i, r1, :, :]
+			# look for the largest value
+			largest_coordinates = np.where(region == np.amax(region))
+			largest_coordinates = list(zip(largest_coordinates[0], largest_coordinates[1]))
+			print("Largest coordinates:")
+			print(largest_coordinates)
+
+	# see if it's "mutual"
+	# add it to buddy_matrix
 	return buddy_matrix
 
 
