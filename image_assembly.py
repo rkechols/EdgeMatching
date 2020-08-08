@@ -83,8 +83,8 @@ def compare_images(image1: np.ndarray, image2: np.ndarray):
 if __name__ == "__main__":
 	original_image = load_image_from_disk("TestImages/Strange.png")
 	show_image(original_image, "original")
-	ps = original_image.shape[0] // 6
-	# ps = 28
+	# ps = original_image.shape[0] // 6
+	ps = 28
 	patch_list = scramble_image(original_image, ps, 4)
 	show_image(assemble_patches(patch_list, original_image.shape[1] // ps), "scrambled")
 	# hypothetical_min = 85 + (15.038 * math.log(ps))

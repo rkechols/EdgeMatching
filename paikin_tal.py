@@ -245,8 +245,8 @@ def pick_first_piece(buddy_matrix: np.ndarray, compatibility_scores: np.ndarray)
 		mutual_compatibility_sum = 0.0
 		for r1 in range(buddy_matrix.shape[1]):
 			j, r2 = buddy_matrix[i, r1]
-			compatibility1 = compatibility_scores[i, r1, j, r2]
-			compatibility2 = compatibility_scores[j, (r2 + 2) % 4, i, (r1 + 2) % 4]
+			_, _, compatibility1 = compatibility_scores[i, r1]
+			_, _, compatibility2 = compatibility_scores[j, (r2 + 2) % 4]
 			mutual_compatibility_sum += (compatibility1 + compatibility2) / 2.0
 		# check if this score is better than any others we've seen
 		if mutual_compatibility_sum > best_score:
