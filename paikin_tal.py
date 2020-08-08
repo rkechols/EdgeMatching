@@ -183,11 +183,16 @@ def get_best_buddies(compatibility_scores: np.ndarray) -> np.ndarray:
 			largest_coordinates = list(zip(largest_coordinates[0], largest_coordinates[1]))
 			found_buddy = False
 			for j, r2 in largest_coordinates:
-				print(f"j: {j}\t\tr2: {r2}")
-				# TODO
 				# see if it's "mutual"
-				# if it is, add it to buddy_matrix
 				r2_inverse = (r2 + 2) % 4
+				region_inverse = compatibility_scores[j, r2_inverse, :, :]
+				largest_coordinates_inverse = np.where(region_inverse == np.amax(region_inverse))
+				largest_coordinates_inverse = list(zip(largest_coordinates_inverse[0], largest_coordinates_inverse[1]))
+				if (i, r1_inverse) in largest_coordinates_inverse:
+					buddy_matrix[i, r1] = (j, r2)
+					found_buddy = True
+					break
+				# if it is, add it to buddy_matrix
 			if not found_buddy:  # none of the values tied for best are a best buddy
 				buddy_matrix[i, r1] = None
 	return buddy_matrix
