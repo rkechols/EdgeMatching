@@ -126,32 +126,28 @@ def get_dissimilarity_scores(patches: list, predictions_matrix: np.ndarray) -> n
 	return score_matrix
 
 
-def compatibility_score(dissimilarity_scores: np.ndarray, patch1_index: int, patch1_r: int, patch2_index: int, patch2_r: int) -> float:
+def compatibility_score(dissimilarity_scores: np.ndarray, patch_index: int, r: int) -> (int, int, float):
 	"""
-	takes a matrix of all dissimilarity scores plus a particular combination of patches and gives the asymmetric compatibility score of that combination
-	:param dissimilarity_scores: the matrix of all dissimilarity scores as a numpy array of shape (n, 4, n, 4), where n is the total number of patches
-	:param patch1_index: the index referring to the first/left patch
-	:param patch1_r: an int in range [0, 3] indicating how far the first/left patch has been rotated
-	:param patch2_index: the index referring to the second/right patch
-	:param patch2_r: an int in range [0, 3] indicating how far the second/right patch has been rotated
-	:return: the asymmetric compatibility score of the two pieces
+	TODO
+	:param dissimilarity_scores:
+	:param patch_index:
+	:param r:
+	:return:
 	"""
-	d_score = dissimilarity_scores[patch1_index, patch1_r, patch2_index, patch2_r]
-	relevant_slice = dissimilarity_scores[patch1_index, patch1_r, :, :]
-	next_best_d_score = np.amin(relevant_slice[relevant_slice != d_score])  # if there is no second-best, this will raise a ValueError
-	if next_best_d_score == INFINITY:
-		return 0.0
-	return 1.0 - (d_score / next_best_d_score)
+	relevant_slice = dissimilarity_scores[patch_index, r, :, :]
+	best_d_score = np.amin(relevant_slice)
+	best_d_score_location = np.where(relevant_slice == best_d_score)
+	best_d_score_location = list(zip(best_d_score_location[0], best_d_score_location[1]))[0]
+	next_best_d_score = np.amin(relevant_slice[relevant_slice != best_d_score])  # if there is no second-best, this will raise a ValueError
+	c_score = 1.0 - (best_d_score / next_best_d_score)
+	return best_d_score_location[0], best_d_score_location[1], c_score
 
 
-def compatibility_score_mp(coord_and_dissimilarities: tuple) -> (tuple, float):
+def compatibility_score_mp(coord_and_dissimilarities: tuple) -> (tuple, tuple):
 	# for use with the multiprocessing library
-	(patch1_index, patch1_r, patch2_index, patch2_r), dissimilarity_scores = coord_and_dissimilarities
-	if patch1_index == patch2_index:
-		score = -INFINITY
-	else:
-		score = compatibility_score(dissimilarity_scores, patch1_index, patch1_r, patch2_index, patch2_r)
-	return (patch1_index, patch1_r, patch2_index, patch2_r), score
+	(patch_index, r), dissimilarity_scores = coord_and_dissimilarities
+	result = compatibility_score(dissimilarity_scores, patch_index, r)
+	return (patch_index, r), result
 
 
 # generates input for compatibility_score_mp()
@@ -161,31 +157,29 @@ class CompatibilityScoreMpGenerator:
 		self.d = dissimilarity_scores
 
 	def __iter__(self):
-		for patch1_index in range(self.n):
-			for r1 in range(4):
-				for patch2_index in range(self.n):
-					for r2 in range(4):
-						yield (patch1_index, r1, patch2_index, r2), self.d
+		for patch_index in range(self.n):
+			for r in range(4):
+				yield (patch_index, r), self.d
 
 	def __len__(self):
-		return self.n * 4 * self.n * 4
+		return self.n * 4
 
 
 def get_compatibility_scores(dissimilarity_scores: np.ndarray) -> np.ndarray:
 	"""
 	takes a matrix of all dissimilarity scores and gives a matrix of compatibility scores
 	:param dissimilarity_scores: the matrix of all dissimilarity scores as a numpy array of shape (n, 4, n, 4), where n is the total number of patches
-	:return: a numpy array of shape (n, 4, n, 4). the value at [i, r1, j, r2] is a compatibility score for patch i and patch j when they are rotated r1 and r2 times, respectively.
+	:return: TODO
 	low values mean they are a bad pairing; high values mean they are a good pairing
 	"""
 	n = dissimilarity_scores.shape[0]
-	score_matrix = np.empty((n, 4, n, 4), dtype=float)
+	score_matrix = np.empty((n, 4), dtype=tuple)
 	with mp.Pool() as pool:
 		gen = CompatibilityScoreMpGenerator(dissimilarity_scores)
 		result_generator = pool.imap_unordered(compatibility_score_mp, gen)
 		with tqdm(total=len(gen)) as progress_bar:
-			for (patch1_index, r1, patch2_index, r2), score in result_generator:
-				score_matrix[patch1_index, r1, patch2_index, r2] = score
+			for (patch1_index, r1), result in result_generator:
+				score_matrix[patch1_index, r1] = result
 				progress_bar.update()
 	return score_matrix
 
@@ -193,37 +187,24 @@ def get_compatibility_scores(dissimilarity_scores: np.ndarray) -> np.ndarray:
 def get_best_buddies(compatibility_scores: np.ndarray) -> np.ndarray:
 	"""
 	takes a matrix of compatibility scores and gives a matrix of best buddies
-	:param compatibility_scores: the matrix of all compatibility scores as a numpy array of shape (n, 4, n, 4), where n is the total number of patches
+	:param compatibility_scores: TODO
 	:return: a matrix indicating best buddies for each edge of each patch, as a numpy array of shape (n, 4). the value at [i, r1] is a tuple indicating the best buddy for patch i
 	when rotated r1 times. the tuple is of form (j, r2), indicating that patch j is the best buddy when rotated r2 times. if there is a value of `None` in place of a tuple, then
 	patch i has no best buddy
 	"""
 	n = compatibility_scores.shape[0]
 	buddy_matrix = np.empty((n, 4), dtype=tuple)
-	# look at each piece in each rotation, find its best neighbor
-	# piece we are looking at
+	# look at each piece in each rotation, see if its best neighbor is mutual
 	for i in range(n):
-		# rotation index
 		for r1 in range(compatibility_scores.shape[1]):
 			r1_inverse = (r1 + 2) % 4
-			# pull out the block of scores that are relevant
-			region = compatibility_scores[i, r1, :, :]
-			# look for the largest value
-			largest_coordinates = np.where(region == np.amax(region))
-			largest_coordinates = list(zip(largest_coordinates[0], largest_coordinates[1]))
-			found_buddy = False
-			for j, r2 in largest_coordinates:
-				# see if it's "mutual"
-				r2_inverse = (r2 + 2) % 4
-				region_inverse = compatibility_scores[j, r2_inverse, :, :]
-				largest_coordinates_inverse = np.where(region_inverse == np.amax(region_inverse))
-				largest_coordinates_inverse = list(zip(largest_coordinates_inverse[0], largest_coordinates_inverse[1]))
-				if (i, r1_inverse) in largest_coordinates_inverse:
-					buddy_matrix[i, r1] = (j, r2)
-					found_buddy = True
-					break
-				# if it is, add it to buddy_matrix
-			if not found_buddy:  # none of the values tied for best are a best buddy
+			j, r2, _ = compatibility_scores[i, r1]
+			# see if it's "mutual"; if it is, add it to buddy_matrix
+			r2_inverse = (r2 + 2) % 4
+			back_i, back_r1, _ = compatibility_scores[j, r2_inverse]
+			if i == back_i and r1_inverse == back_r1:
+				buddy_matrix[i, r1] = (j, r2)
+			else:
 				buddy_matrix[i, r1] = None
 	return buddy_matrix
 
@@ -253,7 +234,7 @@ def pick_first_piece(buddy_matrix: np.ndarray, compatibility_scores: np.ndarray)
 			candidates.append(i)
 	if len(candidates) == 0:
 		# TODO: ...?
-		pass
+		return -1
 	if len(candidates) == 1:
 		return candidates[0]
 	# pick the piece that has the best sum of mutual compatibility scores with its 4 best buddies
@@ -280,7 +261,6 @@ def jigsaw_pt(patches: list):
 	:param patches: a list of numpy arrays representing the scrambled patches of the original image
 	:return: the re-assembled image as a numpy array of shape (r, c, 3)
 	"""
-	# TODO: actually implement the algorithm; these function calls are just examples
 	print("computing 3rd pixel predictions...")
 	predictions_matrix = get_3rd_pixel_predictions(patches)
 	print("computing dissimilarity scores...")
@@ -292,4 +272,5 @@ def jigsaw_pt(patches: list):
 	print("selecting first piece...")
 	first_piece = pick_first_piece(buddy_matrix, compatibility_scores)
 	print(f"first piece selected: {first_piece}")
+	# TODO: actually implement the body of the algorithm
 	return None

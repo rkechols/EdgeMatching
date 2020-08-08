@@ -1,3 +1,4 @@
+import random
 import numpy as np
 from unittest import TestCase
 from constants import INFINITY
@@ -8,12 +9,18 @@ class PaikinTalTest(TestCase):
 	def test_get_best_buddies(self):
 		for _ in range(1000):  # multiple trials since randomness is involved
 			n = 3
-			compatibility_scores = np.random.uniform(0.0, 0.95, (n, 4, n, 4))
+			compatibility_scores = np.empty((n, 4), dtype=tuple)
 			for i in range(n):
-				compatibility_scores[i, :, i, :] = -INFINITY
-			compatibility_scores[0, 0, 1, 3] = 1.0
-			compatibility_scores[1, 1, 0, 2] = 1.0
-			compatibility_scores[2, 2, 1, 0] = 1.0
+				for r in range(4):
+					other_patch_index = i
+					while other_patch_index == i:
+						other_patch_index = random.randrange(n)
+					other_r = random.randrange(4)
+					score = random.uniform(0.0, 0.95)
+					compatibility_scores[i, r] = (other_patch_index, other_r, score)
+			compatibility_scores[0, 0] = (1, 3, 1.0)
+			compatibility_scores[1, 1] = (0, 2, 1.0)
+			compatibility_scores[2, 2] = (1, 0, 1.0)
 			buddies = get_best_buddies(compatibility_scores)
 			# right shape
 			self.assertTupleEqual((3, 4), buddies.shape, "resulting matrix was the wrong shape")
