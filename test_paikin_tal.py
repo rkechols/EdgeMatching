@@ -36,7 +36,7 @@ class PaikinTalTest(TestCase):
 							self.fail(f"{(patch_index1, r1)} was listed as having no best buddy, but should have a buddy:\n{buddies}")
 			self.assertTrue(not_none_count % 2 == 0, "number of patches with best buddies should be even, since the relation is symmetric but irreflexive")
 
-	def test_pick_first_piece_positive(self):
+	def test_pick_first_piece_no_competition(self):
 		# for a visualization of this test case, see the following: https://1drv.ms/u/s!AsgHxnBnyNbihXfX9GsLzyytvuxm
 		buddy_matrix = np.array(
 			[
@@ -61,3 +61,6 @@ class PaikinTalTest(TestCase):
 		compatibility_scores = np.zeros((n, 4, n, 4), dtype=float)
 		answer = pick_first_piece(buddy_matrix, compatibility_scores)
 		self.assertEqual(answer, 6)
+
+	def test_pick_first_piece_by_mutual_compatibility(self):
+		pass

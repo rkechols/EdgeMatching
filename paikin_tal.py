@@ -205,8 +205,43 @@ def pick_first_piece(buddy_matrix: np.ndarray, compatibility_scores: np.ndarray)
 	:param compatibility_scores: the matrix of all compatibility scores as a numpy array of shape (n, 4, n, 4), where n is the total number of patches
 	:return: the index of the patch that is selected as our first piece to place
 	"""
-	# TODO
-	return -1
+	candidates = list()
+	n = buddy_matrix.shape[0]
+	for i in range(n):
+		buddy_count = sum([buddy_matrix[i, r] is not None for r in range(buddy_matrix.shape[1])])
+		if buddy_count != 4:
+			continue
+		# check if its buddies each have 4 buddies
+		passes = True
+		for r1 in range(buddy_matrix.shape[1]):
+			buddy_index, _ = buddy_matrix[i, r1]
+			buddy_count2 = sum([buddy_matrix[buddy_index, r] is not None for r in range(buddy_matrix.shape[1])])
+			if buddy_count2 != 4:
+				passes = False
+				break
+		if passes:
+			candidates.append(i)
+	if len(candidates) == 0:
+		# TODO: ...?
+		pass
+	if len(candidates) == 1:
+		return candidates[0]
+	# pick the piece that has the best sum of mutual compatibility scores with its 4 best buddies
+	best_score = -1.0
+	best_index = -1
+	for i in candidates:
+		# sum its mutual compatibility scores with its 4 best buddies
+		mutual_compatibility_sum = 0.0
+		for r1 in range(buddy_matrix.shape[1]):
+			j, r2 = buddy_matrix[i, r1]
+			compatibility1 = compatibility_scores[i, r1, j, r2]
+			compatibility2 = compatibility_scores[j, (r2 + 2) % 4, i, (r1 + 2) % 4]
+			mutual_compatibility_sum += (compatibility1 + compatibility2) / 2.0
+		# check if this score is better than any others we've seen
+		if mutual_compatibility_sum > best_score:
+			best_score = mutual_compatibility_sum
+			best_index = i
+	return best_index
 
 
 def jigsaw_pt(patches: list):
@@ -224,4 +259,5 @@ def jigsaw_pt(patches: list):
 	buddy_matrix = get_best_buddies(compatibility_scores)
 	print("selecting first piece...")
 	first_piece = pick_first_piece(buddy_matrix, compatibility_scores)
+	print(f"first piece selected: {first_piece}")
 	return None
