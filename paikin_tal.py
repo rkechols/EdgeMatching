@@ -26,6 +26,45 @@ def predict_3rd_pixel(col1: np.ndarray, col2: np.ndarray) -> np.ndarray:
 	return expected
 
 
+def predict_3rd_pixel_mp(coord_last_columns: (np.ndarray, np.ndarray)) -> ((int, int), np.ndarray):
+	coord, col1, col2 = coord_last_columns
+	return coord, predict_3rd_pixel(col1, col2)
+
+
+# generates input for predict_3rd_pixel_mp()
+class Predict3rdPixelMpGenerator:
+	def __init__(self, patches: list):
+		self.patches = patches
+
+	def __iter__(self):
+		for patch_index, patch in enumerate(self.patches):
+			for r in range(4):
+				patch_rotated = np.rot90(patch, r)
+				yield (patch_index, r), patch_rotated[:, -2, :], patch_rotated[:, -1, :]
+
+	def __len__(self):
+		n = len(self.patches)
+		return n * 4
+
+
+def get_3rd_pixel_predictions(patches: list) -> np.ndarray:
+	"""
+	TODO
+	:param patches:
+	:return:
+	"""
+	n = len(patches)
+	prediction_matrix = np.empty((n, 4), dtype=np.ndarray)
+	with mp.Pool() as pool:
+		gen = Predict3rdPixelMpGenerator(patches)
+		result_generator = pool.imap_unordered(predict_3rd_pixel_mp, gen)
+		with tqdm(total=len(gen)) as progress_bar:
+			for (patch_index, r), predicted_column in result_generator:
+				prediction_matrix[patch_index, r] = predicted_column
+				progress_bar.update()
+	return prediction_matrix
+
+
 def norm_l1(col1: np.ndarray, col2: np.ndarray) -> int:
 	"""
 	takes two columns (or rows) of pixels and gives the L_1 norm of the their difference
@@ -37,58 +76,49 @@ def norm_l1(col1: np.ndarray, col2: np.ndarray) -> int:
 	return sum(diff_col.flatten())
 
 
-def dissimilarity_score_pt(patch1: np.ndarray, patch2: np.ndarray) -> int:
-	"""
-	takes two patches to be placed next to each other and gives an asymmetric dissimilarity score
-	:param patch1: the patch to be placed on the left, as a numpy array of shape (x, y, 3)
-	:param patch2: the patch to be placed on the right, as a numpy array of shape (x, z, 3)
-	:return: the asymmetric dissimilarity score of `patch1` with `patch2`
-	"""
-	expected_col = predict_3rd_pixel(patch1[:, -2, :], patch1[:, -1, :])
-	return norm_l1(expected_col, patch2[:, 0, :])
-
-
-def dissimilarity_score_pt_mp(coord_and_patches: tuple) -> (tuple, float):
+def norm_l1_mp(coord_and_columns: tuple) -> (tuple, float):
 	# for use with the multiprocessing library
-	(patch1_index, patch1_r, patch2_index, patch2_r), patch1, patch2 = coord_and_patches
+	(patch1_index, patch1_r, patch2_index, patch2_r), predicted, actual = coord_and_columns
 	if patch1_index == patch2_index:
 		score = INFINITY
 	else:
-		score = dissimilarity_score_pt(patch1, patch2)
+		score = norm_l1(predicted, actual)
 	return (patch1_index, patch1_r, patch2_index, patch2_r), score
 
 
 # generates input for dissimilarity_score_pt_mp()
 class DissimilarityScorePtMpGenerator:
-	def __init__(self, patches: list):
+	def __init__(self, patches: list, predictions_matrix: np.ndarray):
 		self.patches = patches
+		self.predictions = predictions_matrix
 
 	def __iter__(self):
 		for patch1_index, patch1 in enumerate(self.patches):
 			for r1 in range(4):
-				patch1_rotated = np.rot90(patch1, r1)
+				predicted_column = self.predictions[patch1_index, r1]
 				for patch2_index, patch2 in enumerate(self.patches):
 					for r2 in range(4):
-						patch2_rotated = np.rot90(patch2, r2)
-						yield (patch1_index, r1, patch2_index, r2), patch1_rotated, patch2_rotated
+						actual_column = patch2[:, 0, :]
+						yield (patch1_index, r1, patch2_index, r2), predicted_column, actual_column
 
 	def __len__(self):
 		n = len(self.patches)
 		return n * 4 * n * 4
 
 
-def get_dissimilarity_scores(patches: list) -> np.ndarray:
+def get_dissimilarity_scores(patches: list, predictions_matrix: np.ndarray) -> np.ndarray:
 	"""
 	takes a list of scrambled patches and creates a matrix that gives dissimilarity scores to each possible pairing of patches
 	:param patches: list of square numpy arrays, each of the same shape (x, x, 3); the list's length is referred to as n
+	:param predictions_matrix: TODO
 	:return: a numpy array of shape (n, 4, n, 4). the value at [i, r1, j, r2] indicates how costly pairing patch i and patch j is when they are rotated r1 and r2 times, respectively
 	low values mean they are a good pairing; high values mean they are a bad pairing
 	"""
 	n = len(patches)
 	score_matrix = np.empty((n, 4, n, 4), dtype=float)
 	with mp.Pool() as pool:
-		gen = DissimilarityScorePtMpGenerator(patches)
-		result_generator = pool.imap_unordered(dissimilarity_score_pt_mp, gen)
+		gen = DissimilarityScorePtMpGenerator(patches, predictions_matrix)
+		result_generator = pool.imap_unordered(norm_l1_mp, gen)
 		with tqdm(total=len(gen)) as progress_bar:
 			for (patch1_index, r1, patch2_index, r2), score in result_generator:
 				score_matrix[patch1_index, r1, patch2_index, r2] = score
@@ -108,7 +138,7 @@ def compatibility_score(dissimilarity_scores: np.ndarray, patch1_index: int, pat
 	"""
 	d_score = dissimilarity_scores[patch1_index, patch1_r, patch2_index, patch2_r]
 	relevant_slice = dissimilarity_scores[patch1_index, patch1_r, :, :]
-	next_best_d_score = np.amin(relevant_slice[relevant_slice > d_score])  # if there is no second-best, this will raise a ValueError
+	next_best_d_score = np.amin(relevant_slice[relevant_slice != d_score])  # if there is no second-best, this will raise a ValueError
 	if next_best_d_score == INFINITY:
 		return 0.0
 	return 1.0 - (d_score / next_best_d_score)
@@ -251,8 +281,10 @@ def jigsaw_pt(patches: list):
 	:return: the re-assembled image as a numpy array of shape (r, c, 3)
 	"""
 	# TODO: actually implement the algorithm; these function calls are just examples
+	print("computing 3rd pixel predictions...")
+	predictions_matrix = get_3rd_pixel_predictions(patches)
 	print("computing dissimilarity scores...")
-	dissimilarity_scores = get_dissimilarity_scores(patches)
+	dissimilarity_scores = get_dissimilarity_scores(patches, predictions_matrix)
 	print("computing initial compatibility scores...")
 	compatibility_scores = get_compatibility_scores(dissimilarity_scores)
 	print("finding initial best buddies...")
