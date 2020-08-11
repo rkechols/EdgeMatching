@@ -26,7 +26,7 @@ def predict_3rd_pixel(col1: np.ndarray, col2: np.ndarray) -> np.ndarray:
 	return expected
 
 
-def predict_3rd_pixel_mp(coord_last_columns: (np.ndarray, np.ndarray)) -> ((int, int), np.ndarray):
+def predict_3rd_pixel_mp(coord_last_columns: (tuple, np.ndarray, np.ndarray)) -> (tuple, np.ndarray):
 	coord, col1, col2 = coord_last_columns
 	return coord, predict_3rd_pixel(col1, col2)
 
@@ -76,9 +76,9 @@ def norm_l1(col1: np.ndarray, col2: np.ndarray) -> int:
 	return sum(diff_col.flatten())
 
 
-def norm_l1_mp(coord_and_columns: tuple) -> (tuple, float):
+def norm_l1_mp(coord_and_columns: (tuple, np.ndarray, np.ndarray)) -> (tuple, float):
 	# for use with the multiprocessing library
-	(patch1_index, patch1_r, patch2_index, patch2_r), predicted, actual = coord_and_columns
+	(patch1_index, patch1_r, patch2_index, patch2_r), predicted, actual, = coord_and_columns
 	if patch1_index == patch2_index:
 		score = INFINITY
 	else:
@@ -98,7 +98,8 @@ class DissimilarityScorePtMpGenerator:
 				predicted_column = self.predictions[patch1_index, r1]
 				for patch2_index, patch2 in enumerate(self.patches):
 					for r2 in range(4):
-						actual_column = patch2[:, 0, :]
+						patch2_rotated = np.rot90(patch2, r2)
+						actual_column = patch2_rotated[:, 0, :]
 						yield (patch1_index, r1, patch2_index, r2), predicted_column, actual_column
 
 	def __len__(self):
@@ -143,7 +144,7 @@ def compatibility_score(dissimilarity_scores: np.ndarray, patch_index: int, r: i
 	return best_d_score_location[0], best_d_score_location[1], c_score
 
 
-def compatibility_score_mp(coord_and_dissimilarities: tuple) -> (tuple, tuple):
+def compatibility_score_mp(coord_and_dissimilarities: (tuple, np.ndarray)) -> (tuple, tuple):
 	# for use with the multiprocessing library
 	(patch_index, r), dissimilarity_scores = coord_and_dissimilarities
 	result = compatibility_score(dissimilarity_scores, patch_index, r)
@@ -233,8 +234,8 @@ def pick_first_piece(buddy_matrix: np.ndarray, compatibility_scores: np.ndarray)
 		if passes:
 			candidates.append(i)
 	if len(candidates) == 0:
-		# TODO: ...?
-		return -1
+		print("NO PIECE HAS ENOUGH BEST BUDDIES 2 LAYERS DEEP")
+		# TODO for Haylee: find which pieces have the most best buddies, and put them in the list `candidates`; the following code will do the rest
 	if len(candidates) == 1:
 		return candidates[0]
 	# pick the piece that has the best sum of mutual compatibility scores with its 4 best buddies
