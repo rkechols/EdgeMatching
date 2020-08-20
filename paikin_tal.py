@@ -235,7 +235,9 @@ def pick_first_piece(buddy_matrix: np.ndarray, compatibility_scores: np.ndarray)
 			candidates.append(i)
 	if len(candidates) == 0:
 		print("NO PIECE HAS ENOUGH BEST BUDDIES 2 LAYERS DEEP")
-		# TODO for Haylee: find which pieces have the most best buddies, and put them in the list `candidates`; the following code will do the rest
+		buddy_counts = [sum([buddy_matrix[buddy_index, r] is not None for r in range(buddy_matrix.shape[1])]) for buddy_index in range(buddy_matrix.shape[0])]
+		x = np.argwhere(buddy_counts == np.amax(buddy_counts))
+		candidates = x.flatten().tolist()
 	if len(candidates) == 1:
 		return candidates[0]
 	# pick the piece that has the best sum of mutual compatibility scores with its 4 best buddies
