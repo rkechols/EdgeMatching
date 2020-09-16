@@ -1,3 +1,4 @@
+import copy
 import datetime
 import numpy as np
 import random
@@ -28,44 +29,26 @@ def patch_image(image: np.ndarray, patch_size: int) -> list:
 	return patched_array
 
 
-def scramble_image(patched_array: list, seed: int = None) -> list:
+def scramble_image(patches: list, seed: int = None) -> (list, dict):
 	"""
 	takes an rgb image and scrambles it into square patches, each at a random rotation
-	:param patched_array: TODO
-	:param image: numpy array of shape (r, c, 3) where r is the number of rows and c is the number of columns
-	:param patch_size: number indicating how many pixels wide and tall each patch should be
+	:param patches: TODO
 	:param seed: a seed to use for the image scrambling. If none, then the scramble will be truly random
-	:return: a list containing the scrambled patches, each of shape (patch_size, patch_size, 3)
+	:return: a list containing the scrambled patches, each of shape (patch_size, patch_size, 3) TODO
 	"""
+	n = len(patches)
 	if seed is not None:
 		random.seed(seed)
-	# get the image (we actually have it: np.ndarray)
-	# Break image into patches
-	# vertical_patches = image.shape[0] // patch_size
-	# horizontal_patches = image.shape[1] // patch_size
-	#
-	# patched_array = list()
-	#
-	# for i in range(vertical_patches):
-	# 	# starting pixel
-	# 	vert_pixel_location = patch_size * i
-	# 	for j in range(horizontal_patches):
-	# 		# starting pixel
-	# 		hor_pix_location = patch_size * j
-	# 		patch = image[vert_pixel_location:vert_pixel_location+patch_size, hor_pix_location:hor_pix_location+patch_size, :]
-	# 		patched_array.append(patch)
-
-	# patched_array = list()
-
-	# Scramble the patches (AKA put them in a random order)
-	random.shuffle(patched_array)
-	# for i in range(patched_array):
-	# Doing it without .shuffle command: pick a random index between 0 and i, swap what is in spot 0 and spot i, do this a couple times
-	# Also give them a random rotation!
-	rotated_patched_array = list()
-	for patch in patched_array:
-		rotated_patched_array.append(np.rot90(patch, random.randrange(4)))
-	return rotated_patched_array
+	# make a list of the original indices, and a list of the shuffled indices so we know what piece went where
+	all_indices = list(range(n))
+	all_indices_shuffled = copy.copy(all_indices)
+	rotations = [random.randrange(4) for _ in range(n)]
+	shuffle_dict = dict()
+	patches_scrambled = list()
+	for original, new, r in zip(all_indices, all_indices_shuffled, rotations):
+		shuffle_dict[original] = (new, r)
+		patches_scrambled.append(np.rot90(patches[original], r))
+	return patches_scrambled, shuffle_dict
 
 
 def compare_images(image1: np.ndarray, image2: np.ndarray):
@@ -105,7 +88,7 @@ if __name__ == "__main__":
 	# ps = original_image.shape[1] // 2
 	ps = 28
 	original_patched = patch_image(original_image, ps)
-	patch_list = scramble_image(original_patched, 4)
+	patch_list, shuffle_dictionary = scramble_image(original_patched, 4)
 	show_image(assemble_patches(patch_list, original_image.shape[1] // ps), "scrambled")
 	# hypothetical_min = 85 + (15.038 * math.log(ps))
 	# hypothetical_max = 255 - (14.235 * math.log(ps))
