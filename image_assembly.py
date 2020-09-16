@@ -2,7 +2,8 @@ import datetime
 import numpy as np
 import random
 from functions import assemble_patches, load_image_from_disk, show_image
-from kruskal import jigsaw_kruskals
+from kruskal import jigsaw_kruskals, assemble_image_kruskal
+from accuracy import verify_accuracy
 from prim import jigsaw_prims
 
 
@@ -10,19 +11,7 @@ from prim import jigsaw_prims
 # hypothetical_min = 0
 # hypothetical_max = 255
 
-
-def scramble_image(image: np.ndarray, patch_size: int, seed: int = None) -> list:
-	"""
-	takes an rgb image and scrambles it into square patches, each at a random rotation
-	:param image: numpy array of shape (r, c, 3) where r is the number of rows and c is the number of columns
-	:param patch_size: number indicating how many pixels wide and tall each patch should be
-	:param seed: a seed to use for the image scrambling. If none, then the scramble will be truly random
-	:return: a list containing the scrambled patches, each of shape (patch_size, patch_size, 3)
-	"""
-	if seed is not None:
-		random.seed(seed)
-	# get the image (we actually have it: np.ndarray)
-	# Break image into patches
+def patch_image(image: np.ndarray, patch_size: int) -> list:
 	vertical_patches = image.shape[0] // patch_size
 	horizontal_patches = image.shape[1] // patch_size
 
@@ -34,8 +23,39 @@ def scramble_image(image: np.ndarray, patch_size: int, seed: int = None) -> list
 		for j in range(horizontal_patches):
 			# starting pixel
 			hor_pix_location = patch_size * j
-			patch = image[vert_pixel_location:vert_pixel_location+patch_size, hor_pix_location:hor_pix_location+patch_size, :]
+			patch = image[vert_pixel_location:vert_pixel_location + patch_size, hor_pix_location:hor_pix_location + patch_size, :]
 			patched_array.append(patch)
+	return patched_array
+
+
+def scramble_image(patched_array: list, seed: int = None) -> list:
+	"""
+	takes an rgb image and scrambles it into square patches, each at a random rotation
+	:param patched_array: TODO
+	:param image: numpy array of shape (r, c, 3) where r is the number of rows and c is the number of columns
+	:param patch_size: number indicating how many pixels wide and tall each patch should be
+	:param seed: a seed to use for the image scrambling. If none, then the scramble will be truly random
+	:return: a list containing the scrambled patches, each of shape (patch_size, patch_size, 3)
+	"""
+	if seed is not None:
+		random.seed(seed)
+	# get the image (we actually have it: np.ndarray)
+	# Break image into patches
+	# vertical_patches = image.shape[0] // patch_size
+	# horizontal_patches = image.shape[1] // patch_size
+	#
+	# patched_array = list()
+	#
+	# for i in range(vertical_patches):
+	# 	# starting pixel
+	# 	vert_pixel_location = patch_size * i
+	# 	for j in range(horizontal_patches):
+	# 		# starting pixel
+	# 		hor_pix_location = patch_size * j
+	# 		patch = image[vert_pixel_location:vert_pixel_location+patch_size, hor_pix_location:hor_pix_location+patch_size, :]
+	# 		patched_array.append(patch)
+
+	# patched_array = list()
 
 	# Scramble the patches (AKA put them in a random order)
 	random.shuffle(patched_array)
@@ -84,17 +104,21 @@ if __name__ == "__main__":
 	show_image(original_image, "original")
 	# ps = original_image.shape[1] // 2
 	ps = 28
-	patch_list = scramble_image(original_image, ps, 4)
+	original_patched = patch_image(original_image, ps)
+	patch_list = scramble_image(original_patched, 4)
 	show_image(assemble_patches(patch_list, original_image.shape[1] // ps), "scrambled")
 	# hypothetical_min = 85 + (15.038 * math.log(ps))
 	# hypothetical_max = 255 - (14.235 * math.log(ps))
 	print(f"algorithm start time: {datetime.datetime.now()}")
+	reconstruction_matrix = jigsaw_kruskals(patch_list)
+	reconstructed_image = assemble_image_kruskal(patch_list, reconstruction_matrix)
 	# reconstructed_image = jigsaw_kruskals(patch_list)
-	reconstructed_image = jigsaw_prims(patch_list)
+	# reconstructed_image = jigsaw_prims(patch_list)
 	print(f"algorithm end time: {datetime.datetime.now()}")
 	if reconstructed_image is not None:
 		show_image(reconstructed_image, "final answer")
-		for rotation in range(4):
-			compare_images(original_image, np.rot90(reconstructed_image, rotation))
+		verify_accuracy(original_patched, reconstruction_matrix)
+		# for rotation in range(4):
+		# 	compare_images(original_image, np.rot90(reconstructed_image, rotation))
 	else:
 		print("reconstructed_image is None")

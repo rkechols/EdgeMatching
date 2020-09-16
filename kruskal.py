@@ -220,7 +220,7 @@ def kruskals_reconstruction(graph: np.ndarray) -> np.ndarray:
 	return sections[0][1]
 
 
-def assemble_image(patches: list, construction_matrix: np.ndarray) -> Union[None, np.ndarray]:
+def assemble_image_kruskal(patches: list, construction_matrix: np.ndarray) -> Union[None, np.ndarray]:
 	"""
 	takes a list of patches and a reconstruction matrix to assemble the patches
 	:param patches: a list of numpy arrays representing the scrambled patches of the original image
@@ -261,7 +261,7 @@ def jigsaw_kruskals(patches: list):
 	valid = verify_reconstruction_matrix(reconstruction_matrix, len(patches))
 	print(f"reconstruction_matrix valid: {valid}")
 	if valid:
-		reconstructed_image = assemble_image(patches, reconstruction_matrix)
-		return reconstructed_image
+		# reconstructed_image = assemble_image(patches, reconstruction_matrix)
+		return reconstruction_matrix
 	else:
 		return None
