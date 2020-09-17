@@ -42,12 +42,13 @@ def scramble_image(patches: list, seed: int = None) -> (list, dict):
 	# make a list of the original indices, and a list of the shuffled indices so we know what piece went where
 	all_indices = list(range(n))
 	all_indices_shuffled = copy.copy(all_indices)
+	random.shuffle(all_indices_shuffled)
 	rotations = [random.randrange(4) for _ in range(n)]
 	shuffle_dict = dict()
 	patches_scrambled = list()
 	for original, new, r in zip(all_indices, all_indices_shuffled, rotations):
 		shuffle_dict[original] = (new, r)
-		patches_scrambled.append(np.rot90(patches[original], r))
+		patches_scrambled.append(np.rot90(patches[new], r))
 	return patches_scrambled, shuffle_dict
 
 
@@ -100,8 +101,9 @@ if __name__ == "__main__":
 	print(f"algorithm end time: {datetime.datetime.now()}")
 	if reconstructed_image is not None:
 		show_image(reconstructed_image, "final answer")
-		verify_accuracy(original_patched, reconstruction_matrix)
-		# for rotation in range(4):
-		# 	compare_images(original_image, np.rot90(reconstructed_image, rotation))
+		accuracy, location_accuracy = verify_accuracy(original_patched, reconstruction_matrix, shuffle_dictionary)
+		show_image(reconstructed_image, "final answer")
+		print("accuracy: " + str(accuracy * 100) + "%")
+		print("with " + str(location_accuracy * 100) + "% in the correct position")
 	else:
 		print("reconstructed_image is None")
