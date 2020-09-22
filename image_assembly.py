@@ -47,7 +47,7 @@ def scramble_image(patches: list, seed: int = None) -> (list, dict):
 	shuffle_dict = dict()
 	patches_scrambled = list()
 	for original, new, r in zip(all_indices, all_indices_shuffled, rotations):
-		shuffle_dict[original] = (new, r)
+		shuffle_dict[new] = (original, r)
 		patches_scrambled.append(np.rot90(patches[new], r))
 	return patches_scrambled, shuffle_dict
 
