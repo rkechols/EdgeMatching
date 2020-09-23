@@ -1,5 +1,5 @@
 import numpy as np
-from functions import block_rot90
+from functions import block_rot90, coord_rot90
 
 
 def verify_accuracy(original, reconstructed, shuffle_dictionary): # TODO, don't actually need original patches?
@@ -66,6 +66,7 @@ def absolute_accuracy_placement_bonus(correct, reconstructed):
                 if correct[i][j][1] == reconstructed[i][j][1]: #inside if?
                     score += 0.5
     return score / num_squares
+# TODO edge cases such as weirdly shaped reconstructed stuff
 
 
 def relative_accuracy(correct, reconstructed):
@@ -77,31 +78,36 @@ def relative_accuracy(correct, reconstructed):
             index_correct = correct[i][j][0]
             row_recon, col_recon = find_index_match(index_correct, reconstructed) # find index in reconstruction matrix that matches this index
 
-            correct_edges = [-1, -1, -1, -1]
+            rotated = reconstructed #name?
+            rotation_difference = reconstructed[row_recon][col_recon][1] - correct[i][j][1] % 4
+            if rotation_difference != 0:
+                rotated = block_rot90(reconstructed, rotation_difference)
+                row_recon, col_recon = coord_rot90(row_recon, col_recon, reconstructed.shape[0],
+                                                   reconstructed.shape[1], rotation_difference)
+
+            correct_edges = [(-1, 0)] * 4
             if i > 0:
-                correct_edges[0] = correct[i-1][j][0]
+                correct_edges[0] = correct[i-1][j]
             if j < correct.shape[0] - 1:
-                correct_edges[1] = correct[i][j+1][0]
+                correct_edges[1] = correct[i][j+1]
             if i < correct.shape[1] - 1:
-                correct_edges[2] = correct[i+1][j][0]
+                correct_edges[2] = correct[i+1][j]
             if j > 0:
-                correct_edges[3] = correct[i][j-1][0]
+                correct_edges[3] = correct[i][j-1]
 
-            reconstructed_edges = [-1, -1, -1, -1]
+            reconstructed_edges = [(-1, 0)] * 4
             if row_recon > 0:
-                reconstructed_edges[0] = reconstructed[row_recon - 1][col_recon][0]
-            if col_recon < reconstructed.shape[0] - 1:
-                reconstructed_edges[1] = reconstructed[row_recon][col_recon + 1][0]
-            if row_recon < reconstructed.shape[1] - 1:
-                reconstructed_edges[2] = reconstructed[row_recon + 1][col_recon][0]
+                reconstructed_edges[0] = rotated[row_recon - 1][col_recon]
+            if col_recon < rotated.shape[0] - 1:
+                reconstructed_edges[1] = rotated[row_recon][col_recon + 1]
+            if row_recon < rotated.shape[1] - 1:
+                reconstructed_edges[2] = rotated[row_recon + 1][col_recon]
             if col_recon > 0:
-                reconstructed_edges[3] = reconstructed[row_recon][col_recon - 1][0]
+                reconstructed_edges[3] = rotated[row_recon][col_recon - 1]
 
-            for rot in range(4):
-                list = correct_edges[rot:] + correct_edges[:rot] # check four rotations of correct_edges
-                if np.all(list == reconstructed_edges):
-                    score += 1
-    print("score" + str(score/ 16))
+            score += np.sum(correct_edges == reconstructed_edges)
+
+    print("score" + str(score/ (16 * 4))) #todo hard code fix
     return score / 16
 
 
