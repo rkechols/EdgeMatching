@@ -317,12 +317,13 @@ def get_best_buddies(compatibility_scores: np.ndarray, rotations_shuffled: bool 
 	return buddy_matrix
 
 
-def pick_first_piece(buddy_matrix: np.ndarray, compatibility_scores: np.ndarray, best_neighbors: np.ndarray) -> int:
+def pick_first_piece(buddy_matrix: np.ndarray, compatibility_scores: np.ndarray, best_neighbors: np.ndarray, rotations_shuffled: bool = True) -> int:
 	"""
 	takes info about best buddies and compatibility scores and selects the first piece to be placed
 	:param buddy_matrix: the matrix indicating the best buddy of each piece, if any, as a numpy of shape (n, 4) containing tuples of form (piece_index, rotation_index)
-	:param compatibility_scores: the matrix of all compatibility scores as a numpy array of shape (n, 4, n, 4), where n is the total number of patches
+	:param compatibility_scores: the matrix of all compatibility scores as a numpy array of shape (n, 4, n[, 4)], where n is the total number of patches
 	:param best_neighbors: TODO
+	:param rotations_shuffled: indicates if the patches have been rotated randomly (vs all being rotated correctly to start with)
 	:return: the index of the patch that is selected as our first piece to place
 	"""
 	candidates = list()
@@ -334,7 +335,10 @@ def pick_first_piece(buddy_matrix: np.ndarray, compatibility_scores: np.ndarray,
 		# check if its buddies each have 4 buddies
 		passes = True
 		for r1 in range(buddy_matrix.shape[1]):
-			buddy_index, _ = buddy_matrix[i, r1]
+			if rotations_shuffled:
+				buddy_index, _ = buddy_matrix[i, r1]
+			else:
+				buddy_index = buddy_matrix[i, r1]
 			buddy_count2 = sum([buddy_matrix[buddy_index, r] is not None for r in range(buddy_matrix.shape[1])])
 			if buddy_count2 != 4:
 				passes = False
@@ -361,10 +365,16 @@ def pick_first_piece(buddy_matrix: np.ndarray, compatibility_scores: np.ndarray,
 		for r1 in range(matrix_to_use.shape[1]):
 			if matrix_to_use[i, r1] is None:
 				continue
-			j, r2 = matrix_to_use[i, r1]
-			compatibility1 = compatibility_scores[i, r1, j, r2]
-			compatibility2 = compatibility_scores[j, (r2 + 2) % 4, i, (r1 + 2) % 4]
-			mutual_compatibility_sum += (compatibility1 + compatibility2) / 2.0
+			if rotations_shuffled:
+				j, r2 = matrix_to_use[i, r1]
+				compatibility1 = compatibility_scores[i, r1, j, r2]
+				compatibility2 = compatibility_scores[j, (r2 + 2) % 4, i, (r1 + 2) % 4]
+				mutual_compatibility_sum += (compatibility1 + compatibility2) / 2.0
+			else:
+				j = matrix_to_use[i, r1]
+				compatibility1 = compatibility_scores[i, r1, j]
+				compatibility2 = compatibility_scores[j, (r1 + 2) % 4, i]
+				mutual_compatibility_sum += (compatibility1 + compatibility2) / 2.0
 		# check if this score is better than any others we've seen
 		if mutual_compatibility_sum > best_score:
 			best_score = mutual_compatibility_sum
@@ -390,7 +400,7 @@ def jigsaw_pt(patches: list, rotations_shuffled: bool = True):
 	print("finding initial best buddies...")
 	buddy_matrix = get_best_buddies(compatibility_scores, rotations_shuffled)
 	print("selecting first piece...")
-	first_piece = pick_first_piece(buddy_matrix, compatibility_scores, best_neighbors)
+	first_piece = pick_first_piece(buddy_matrix, compatibility_scores, best_neighbors, rotations_shuffled)
 	print(f"first piece selected: {first_piece}")
 	# TODO: actually implement the body of the algorithm
 	return None
