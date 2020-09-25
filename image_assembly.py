@@ -88,14 +88,15 @@ if __name__ == "__main__":
 	show_image(original_image, "original")
 	# ps = original_image.shape[0] // 6
 	ps = 28
-	patch_list = scramble_image(original_image, ps, seed=4, rotation_shuffle=False)
+	rotations = False
+	patch_list = scramble_image(original_image, ps, seed=4, rotation_shuffle=rotations)
 	show_image(assemble_patches(patch_list, original_image.shape[1] // ps), "scrambled")
 	# hypothetical_min = 85 + (15.038 * math.log(ps))
 	# hypothetical_max = 255 - (14.235 * math.log(ps))
 	print(f"algorithm start time: {datetime.datetime.now()}")
 	# reconstructed_image = jigsaw_kruskals(patch_list)
 	# reconstructed_image = jigsaw_prims(patch_list)
-	reconstructed_image = jigsaw_pt(patch_list, rotations_shuffled=False)
+	reconstructed_image = jigsaw_pt(patch_list, rotations_shuffled=rotations)
 	print(f"algorithm end time: {datetime.datetime.now()}")
 	if reconstructed_image is not None:
 		show_image(reconstructed_image, "final answer")

@@ -145,85 +145,116 @@ def get_dissimilarity_scores(patches: list, predictions_matrix: np.ndarray, rota
 	return score_matrix
 
 
-def get_best_neighbors(dissimilarity_scores: np.ndarray) -> np.ndarray:
+def get_best_neighbors(dissimilarity_scores: np.ndarray, rotations_shuffled: bool = True) -> np.ndarray:
 	"""
 	TODO
 	:param dissimilarity_scores:
+	:param rotations_shuffled: indicates if the patches have been rotated randomly (vs all being rotated correctly to start with)
 	:return:
 	"""
 	n = dissimilarity_scores.shape[0]
 	best_neighbors = np.empty((n, 4), dtype=tuple)
 	for i in range(n):
 		for r1 in range(dissimilarity_scores.shape[1]):
-			relevant_section = dissimilarity_scores[i, r1, :, :]
-			best_dissimilarity = np.where(relevant_section == np.amin(relevant_section))
-			best_neighbors[i, r1] = list(zip(*best_dissimilarity))[0]  # just take the first if there's a tie
+			if rotations_shuffled:
+				relevant_section = dissimilarity_scores[i, r1, :, :]
+				best_dissimilarity = np.where(relevant_section == np.amin(relevant_section))
+				best_neighbors[i, r1] = list(zip(*best_dissimilarity))[0]  # just take the first if there's a tie
+			else:
+				relevant_section = dissimilarity_scores[i, r1, :]
+				best_dissimilarity = np.where(relevant_section == np.amin(relevant_section))
+				best_neighbors[i, r1] = best_dissimilarity[0][0]  # just take the first if there's a tie
 	return best_neighbors
 
 
-def compatibility_score(dissimilarity_scores: np.ndarray, best_neighbors: np.ndarray, patch_index: int, r: int) -> np.ndarray:
+def compatibility_score(dissimilarity_scores: np.ndarray, best_neighbors: np.ndarray, patch_index: int, r: int, rotations_shuffled: bool = True) -> np.ndarray:
 	"""
 	TODO
 	:param dissimilarity_scores:
 	:param best_neighbors:
 	:param patch_index:
 	:param r:
+	:param rotations_shuffled: indicates if the patches have been rotated randomly (vs all being rotated correctly to start with)
 	:return:
 	"""
-	relevant_slice = dissimilarity_scores[patch_index, r, :, :]
-	scores_to_return = np.empty_like(relevant_slice)
-	best_d_j, best_d_r = best_neighbors[patch_index, r]
-	best_d_score = dissimilarity_scores[patch_index, r, best_d_j, best_d_r]
-	next_best_d_score = np.amin(relevant_slice[relevant_slice != best_d_score])  # if there is no second-best, this will raise a ValueError
-	for patch_index2 in range(scores_to_return.shape[0]):
-		for r2 in range(scores_to_return.shape[1]):
+	if rotations_shuffled:
+		relevant_slice = dissimilarity_scores[patch_index, r, :, :]
+		scores_to_return = np.empty_like(relevant_slice)
+		best_d_j, best_d_r = best_neighbors[patch_index, r]
+		best_d_score = dissimilarity_scores[patch_index, r, best_d_j, best_d_r]
+		next_best_d_score = np.amin(relevant_slice[relevant_slice != best_d_score])  # if there is no second-best, this will raise a ValueError
+		for patch_index2 in range(scores_to_return.shape[0]):
+			for r2 in range(scores_to_return.shape[1]):
+				if next_best_d_score != 0:
+					scores_to_return[patch_index2, r2] = 1 - (relevant_slice[patch_index2, r2] / next_best_d_score)
+				else:
+					scores_to_return[patch_index2, r2] = 0.0
+	else:
+		relevant_slice = dissimilarity_scores[patch_index, r, :]
+		scores_to_return = np.empty_like(relevant_slice)
+		best_d_j = best_neighbors[patch_index, r]
+		best_d_score = dissimilarity_scores[patch_index, r, best_d_j]
+		next_best_d_score = np.amin(relevant_slice[relevant_slice != best_d_score])  # if there is no second-best, this will raise a ValueError
+		for patch_index2 in range(scores_to_return.shape[0]):
 			if next_best_d_score != 0:
-				scores_to_return[patch_index2, r2] = 1 - (relevant_slice[patch_index2, r2] / next_best_d_score)
+				scores_to_return[patch_index2] = 1 - (relevant_slice[patch_index2] / next_best_d_score)
 			else:
-				scores_to_return[patch_index2, r2] = 0.0
+				scores_to_return[patch_index2] = 0.0
 	return scores_to_return
 
 
-def compatibility_score_mp(coord_and_dissimilarities: (tuple, np.ndarray, np.ndarray)) -> (tuple, np.ndarray):
+def compatibility_score_mp(coord_and_dissimilarities: (tuple, np.ndarray, np.ndarray, bool)) -> (tuple, np.ndarray):
 	# for use with the multiprocessing library
-	(patch_index, r), dissimilarity_scores, best_neighbors = coord_and_dissimilarities
-	compatibility_scores = compatibility_score(dissimilarity_scores, best_neighbors, patch_index, r)
+	(patch_index, r), dissimilarity_scores, best_neighbors, rotations_shuffled = coord_and_dissimilarities
+	compatibility_scores = compatibility_score(dissimilarity_scores, best_neighbors, patch_index, r, rotations_shuffled)
 	return (patch_index, r), compatibility_scores
 
 
 # generates input for compatibility_score_mp()
 class CompatibilityScoreMpGenerator:
-	def __init__(self, dissimilarity_scores: np.ndarray, best_neighbors: np.ndarray):
+	def __init__(self, dissimilarity_scores: np.ndarray, best_neighbors: np.ndarray, rotations_shuffled: bool = True):
 		self.n = dissimilarity_scores.shape[0]
 		self.d = dissimilarity_scores
 		self.b = best_neighbors
+		self.rotations_shuffled = rotations_shuffled
 
 	def __iter__(self):
 		for patch_index in range(self.n):
 			for r in range(4):
-				yield (patch_index, r), self.d, self.b
+				yield (patch_index, r), self.d, self.b, self.rotations_shuffled
 
 	def __len__(self):
 		return self.n * 4
 
 
-def get_compatibility_scores(dissimilarity_scores: np.ndarray, best_neighbors: np.ndarray) -> np.ndarray:
+def get_compatibility_scores(dissimilarity_scores: np.ndarray, best_neighbors: np.ndarray, rotations_shuffled: bool = True) -> np.ndarray:
 	"""
 	takes a matrix of all dissimilarity scores and gives a matrix of compatibility scores
-	:param dissimilarity_scores: the matrix of all dissimilarity scores as a numpy array of shape (n, 4, n, 4), where n is the total number of patches
+	:param dissimilarity_scores: the matrix of all dissimilarity scores as a numpy array of shape (n, 4, n[, 4]), where n is the total number of patches
 	:param best_neighbors: TODO
+	:param rotations_shuffled: indicates if the patches have been rotated randomly (vs all being rotated correctly to start with)
 	:return: TODO
 	low values mean they are a bad pairing; high values mean they are a good pairing
 	"""
 	n = dissimilarity_scores.shape[0]
-	score_matrix = np.empty((n, 4, n, 4), dtype=float)
-	with mp.Pool() as pool:
-		gen = CompatibilityScoreMpGenerator(dissimilarity_scores, best_neighbors)
-		result_generator = pool.imap_unordered(compatibility_score_mp, gen)
-		with tqdm(total=len(gen)) as progress_bar:
-			for (patch1_index, r1), scores_section in result_generator:
-				score_matrix[patch1_index, r1, :, :] = scores_section
-				progress_bar.update()
+	if rotations_shuffled:
+		score_matrix = np.empty((n, 4, n, 4), dtype=float)
+		with mp.Pool() as pool:
+			gen = CompatibilityScoreMpGenerator(dissimilarity_scores, best_neighbors, rotations_shuffled)
+			result_generator = pool.imap_unordered(compatibility_score_mp, gen)
+			with tqdm(total=len(gen)) as progress_bar:
+				for (patch1_index, r1), scores_section in result_generator:
+					score_matrix[patch1_index, r1, :, :] = scores_section
+					progress_bar.update()
+	else:
+		score_matrix = np.empty((n, 4, n), dtype=float)
+		with mp.Pool() as pool:
+			gen = CompatibilityScoreMpGenerator(dissimilarity_scores, best_neighbors, rotations_shuffled)
+			result_generator = pool.imap_unordered(compatibility_score_mp, gen)
+			with tqdm(total=len(gen)) as progress_bar:
+				for (patch1_index, r1), scores_section in result_generator:
+					score_matrix[patch1_index, r1, :] = scores_section
+					progress_bar.update()
 	return score_matrix
 
 
@@ -331,9 +362,9 @@ def jigsaw_pt(patches: list, rotations_shuffled: bool = True):
 	print("computing dissimilarity scores...")
 	dissimilarity_scores = get_dissimilarity_scores(patches, predictions_matrix, rotations_shuffled)
 	print("computing best neighbors...")
-	best_neighbors = get_best_neighbors(dissimilarity_scores)
+	best_neighbors = get_best_neighbors(dissimilarity_scores, rotations_shuffled)
 	print("computing initial compatibility scores...")
-	compatibility_scores = get_compatibility_scores(dissimilarity_scores, best_neighbors)
+	compatibility_scores = get_compatibility_scores(dissimilarity_scores, best_neighbors, rotations_shuffled)
 	print("finding initial best buddies...")
 	buddy_matrix = get_best_buddies(compatibility_scores)
 	print("selecting first piece...")
