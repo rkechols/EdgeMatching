@@ -258,10 +258,11 @@ def get_compatibility_scores(dissimilarity_scores: np.ndarray, best_neighbors: n
 	return score_matrix
 
 
-def get_best_buddies(compatibility_scores: np.ndarray) -> np.ndarray:
+def get_best_buddies(compatibility_scores: np.ndarray, rotations_shuffled: bool = True) -> np.ndarray:
 	"""
 	takes a matrix of compatibility scores and gives a matrix of best buddies
 	:param compatibility_scores: TODO
+	:param rotations_shuffled: indicates if the patches have been rotated randomly (vs all being rotated correctly to start with)
 	:return: a matrix indicating best buddies for each edge of each patch, as a numpy array of shape (n, 4). the value at [i, r1] is a tuple indicating the best buddy for patch i
 	when rotated r1 times. the tuple is of form (j, r2), indicating that patch j is the best buddy when rotated r2 times. if there is a value of `None` in place of a tuple, then
 	patch i has no best buddy
@@ -272,26 +273,47 @@ def get_best_buddies(compatibility_scores: np.ndarray) -> np.ndarray:
 	for i in range(n):
 		for r1 in range(compatibility_scores.shape[1]):
 			r1_inverse = (r1 + 2) % 4
-			relevant_section = compatibility_scores[i, r1, :, :]
-			# find the best compatibility score
-			best_compatibility = np.where(relevant_section == np.amax(relevant_section))
-			best_compatibility = list(zip(*best_compatibility))
-			found_buddy = False
-			for j, r2 in best_compatibility:  # there might be ties; try all of them
-				# see if it's "mutual"; if it is, add it to buddy_matrix
-				r2_inverse = (r2 + 2) % 4
-				relevant_section_back = compatibility_scores[j, r2_inverse, :, :]
-				best_compatibility_back = np.where(relevant_section_back == np.amax(relevant_section_back))
-				best_compatibility_back = list(zip(*best_compatibility_back))
-				for back_i, back_r1 in best_compatibility_back:
-					if i == back_i and r1_inverse == back_r1:
-						buddy_matrix[i, r1] = (j, r2)
-						found_buddy = True
+			if rotations_shuffled:
+				relevant_section = compatibility_scores[i, r1, :, :]
+				# find the best compatibility score
+				best_compatibility = np.where(relevant_section == np.amax(relevant_section))
+				best_compatibility = list(zip(*best_compatibility))
+				found_buddy = False
+				for j, r2 in best_compatibility:  # there might be ties; try all of them
+					# see if it's "mutual"; if it is, add it to buddy_matrix
+					r2_inverse = (r2 + 2) % 4
+					relevant_section_back = compatibility_scores[j, r2_inverse, :, :]
+					best_compatibility_back = np.where(relevant_section_back == np.amax(relevant_section_back))
+					best_compatibility_back = list(zip(*best_compatibility_back))
+					for back_i, back_r1 in best_compatibility_back:
+						if i == back_i and r1_inverse == back_r1:
+							buddy_matrix[i, r1] = (j, r2)
+							found_buddy = True
+							break
+					if found_buddy:
 						break
-				if found_buddy:
-					break
-			if not found_buddy:  # this one has no best buddy :(
-				buddy_matrix[i, r1] = None
+				if not found_buddy:  # this one has no best buddy :(
+					buddy_matrix[i, r1] = None
+			else:  # no rotations
+				relevant_section = compatibility_scores[i, r1, :]
+				# find the best compatibility score
+				best_compatibility = np.where(relevant_section == np.amax(relevant_section))
+				best_compatibility = best_compatibility[0]
+				found_buddy = False
+				for j in best_compatibility:  # there might be ties; try all of them
+					# see if it's "mutual"; if it is, add it to buddy_matrix
+					relevant_section_back = compatibility_scores[j, r1_inverse, :]
+					best_compatibility_back = np.where(relevant_section_back == np.amax(relevant_section_back))
+					best_compatibility_back = best_compatibility_back[0]
+					for back_i in best_compatibility_back:
+						if i == back_i:
+							buddy_matrix[i, r1] = j
+							found_buddy = True
+							break
+					if found_buddy:
+						break
+				if not found_buddy:  # this one has no best buddy :(
+					buddy_matrix[i, r1] = None
 	return buddy_matrix
 
 
@@ -366,7 +388,7 @@ def jigsaw_pt(patches: list, rotations_shuffled: bool = True):
 	print("computing initial compatibility scores...")
 	compatibility_scores = get_compatibility_scores(dissimilarity_scores, best_neighbors, rotations_shuffled)
 	print("finding initial best buddies...")
-	buddy_matrix = get_best_buddies(compatibility_scores)
+	buddy_matrix = get_best_buddies(compatibility_scores, rotations_shuffled)
 	print("selecting first piece...")
 	first_piece = pick_first_piece(buddy_matrix, compatibility_scores, best_neighbors)
 	print(f"first piece selected: {first_piece}")
