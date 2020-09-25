@@ -12,7 +12,7 @@ from prim import jigsaw_prims
 # hypothetical_min = 0
 # hypothetical_max = 255
 
-def patch_image(image: np.ndarray, patch_size: int) -> list:
+def patch_image(image: np.ndarray, patch_size: int) -> list: #todo return
 	vertical_patches = image.shape[0] // patch_size
 	horizontal_patches = image.shape[1] // patch_size
 
@@ -26,7 +26,7 @@ def patch_image(image: np.ndarray, patch_size: int) -> list:
 			hor_pix_location = patch_size * j
 			patch = image[vert_pixel_location:vert_pixel_location + patch_size, hor_pix_location:hor_pix_location + patch_size, :]
 			patched_array.append(patch)
-	return patched_array
+	return patched_array, (vertical_patches, horizontal_patches)
 
 
 def scramble_image(patches: list, seed: int = None) -> (list, dict):
@@ -47,7 +47,7 @@ def scramble_image(patches: list, seed: int = None) -> (list, dict):
 	shuffle_dict = dict()
 	patches_scrambled = list()
 	for original, new, r in zip(all_indices, all_indices_shuffled, rotations):
-		shuffle_dict[new] = (original, r)
+		shuffle_dict[new] = (original, (4 - r) % 4)
 		patches_scrambled.append(np.rot90(patches[new], r))
 	return patches_scrambled, shuffle_dict
 
@@ -84,11 +84,11 @@ def compare_images(image1: np.ndarray, image2: np.ndarray):
 
 
 if __name__ == "__main__":
-	original_image = load_image_from_disk("TestImages/Giraffe.jpg")
+	original_image = load_image_from_disk("TestImages/shrek.jpg")
 	show_image(original_image, "original")
 	# ps = original_image.shape[1] // 2
 	ps = 28
-	original_patched = patch_image(original_image, ps)
+	original_patched, dimensions = patch_image(original_image, ps)
 	patch_list, shuffle_dictionary = scramble_image(original_patched, 4)
 	show_image(assemble_patches(patch_list, original_image.shape[1] // ps), "scrambled")
 	# hypothetical_min = 85 + (15.038 * math.log(ps))
@@ -101,9 +101,10 @@ if __name__ == "__main__":
 	print(f"algorithm end time: {datetime.datetime.now()}")
 	if reconstructed_image is not None:
 		show_image(reconstructed_image, "final answer")
-		accuracy, location_accuracy = verify_accuracy(original_patched, reconstruction_matrix, shuffle_dictionary)
+		accuracy, location_accuracy, relative_accuracy = verify_accuracy(original_patched, reconstruction_matrix, shuffle_dictionary, dimensions)
 		show_image(reconstructed_image, "final answer")
-		print("accuracy: " + str(accuracy * 100) + "%")
+		print("Absolute accuracy: " + str(accuracy * 100) + "%")
 		print("with " + str(location_accuracy * 100) + "% in the correct position")
+		print("Relative accuracy: " + str(relative_accuracy * 100) + "%")
 	else:
 		print("reconstructed_image is None")
