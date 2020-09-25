@@ -12,12 +12,13 @@ from prim import jigsaw_prims
 # hypothetical_max = 255
 
 
-def scramble_image(image: np.ndarray, patch_size: int, seed: int = None) -> list:
+def scramble_image(image: np.ndarray, patch_size: int, seed: int = None, rotation_shuffle: bool = True) -> list:
 	"""
 	takes an rgb image and scrambles it into square patches, each at a random rotation
 	:param image: numpy array of shape (r, c, 3) where r is the number of rows and c is the number of columns
 	:param patch_size: number indicating how many pixels wide and tall each patch should be
 	:param seed: a seed to use for the image scrambling. If none, then the scramble will be truly random
+	:param rotation_shuffle: indicates if patches have their rotation scrambled also
 	:return: a list containing the scrambled patches, each of shape (patch_size, patch_size, 3)
 	"""
 	if seed is not None:
@@ -40,6 +41,8 @@ def scramble_image(image: np.ndarray, patch_size: int, seed: int = None) -> list
 
 	# Scramble the patches (AKA put them in a random order)
 	random.shuffle(patched_array)
+	if not rotation_shuffle:
+		return patched_array
 	# for i in range(patched_array):
 	# Doing it without .shuffle command: pick a random index between 0 and i, swap what is in spot 0 and spot i, do this a couple times
 	# Also give them a random rotation!
@@ -85,14 +88,14 @@ if __name__ == "__main__":
 	show_image(original_image, "original")
 	# ps = original_image.shape[0] // 6
 	ps = 28
-	patch_list = scramble_image(original_image, ps, 4)
+	patch_list = scramble_image(original_image, ps, seed=4, rotation_shuffle=False)
 	show_image(assemble_patches(patch_list, original_image.shape[1] // ps), "scrambled")
 	# hypothetical_min = 85 + (15.038 * math.log(ps))
 	# hypothetical_max = 255 - (14.235 * math.log(ps))
 	print(f"algorithm start time: {datetime.datetime.now()}")
 	# reconstructed_image = jigsaw_kruskals(patch_list)
 	# reconstructed_image = jigsaw_prims(patch_list)
-	reconstructed_image = jigsaw_pt(patch_list)
+	reconstructed_image = jigsaw_pt(patch_list, rotations_shuffled=False)
 	print(f"algorithm end time: {datetime.datetime.now()}")
 	if reconstructed_image is not None:
 		show_image(reconstructed_image, "final answer")

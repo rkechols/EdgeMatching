@@ -78,52 +78,70 @@ def norm_l1(col1: np.ndarray, col2: np.ndarray) -> int:
 
 def norm_l1_mp(coord_and_columns: (tuple, np.ndarray, np.ndarray)) -> (tuple, float):
 	# for use with the multiprocessing library
-	(patch1_index, patch1_r, patch2_index, patch2_r), predicted, actual, = coord_and_columns
-	if patch1_index == patch2_index:
+	t, predicted, actual, = coord_and_columns
+	if t[0] == t[2]:  # same patch
 		score = INFINITY
 	else:
 		score = norm_l1(predicted, actual)
-	return (patch1_index, patch1_r, patch2_index, patch2_r), score
+	return t, score
 
 
 # generates input for dissimilarity_score_pt_mp()
 class DissimilarityScorePtMpGenerator:
-	def __init__(self, patches: list, predictions_matrix: np.ndarray):
+	def __init__(self, patches: list, predictions_matrix: np.ndarray, rotations_shuffled: bool = True):
 		self.patches = patches
 		self.predictions = predictions_matrix
+		self.rotations_shuffled = rotations_shuffled
 
 	def __iter__(self):
 		for patch1_index, patch1 in enumerate(self.patches):
 			for r1 in range(4):
 				predicted_column = self.predictions[patch1_index, r1]
 				for patch2_index, patch2 in enumerate(self.patches):
-					for r2 in range(4):
-						patch2_rotated = np.rot90(patch2, r2)
-						actual_column = patch2_rotated[:, 0, :]
-						yield (patch1_index, r1, patch2_index, r2), predicted_column, actual_column
+					if self.rotations_shuffled:
+						for r2 in range(4):
+							patch2_rotated = np.rot90(patch2, r2)
+							actual_column = patch2_rotated[:, 0, :]
+							yield (patch1_index, r1, patch2_index, r2), predicted_column, actual_column
+					else:
+						yield (patch1_index, r1, patch2_index), predicted_column, np.rot90(patch2, r1)[:, 0, :]
 
 	def __len__(self):
 		n = len(self.patches)
-		return n * 4 * n * 4
+		if self.rotations_shuffled:
+			return n * 4 * n * 4
+		else:
+			return n * 4 * n
 
 
-def get_dissimilarity_scores(patches: list, predictions_matrix: np.ndarray) -> np.ndarray:
+def get_dissimilarity_scores(patches: list, predictions_matrix: np.ndarray, rotations_shuffled: bool = True) -> np.ndarray:
 	"""
 	takes a list of scrambled patches and creates a matrix that gives dissimilarity scores to each possible pairing of patches
 	:param patches: list of square numpy arrays, each of the same shape (x, x, 3); the list's length is referred to as n
 	:param predictions_matrix: TODO
+	:param rotations_shuffled: indicates if the patches have been rotated randomly (vs all being rotated correctly to start with)
 	:return: a numpy array of shape (n, 4, n, 4). the value at [i, r1, j, r2] indicates how costly pairing patch i and patch j is when they are rotated r1 and r2 times, respectively
 	low values mean they are a good pairing; high values mean they are a bad pairing
 	"""
 	n = len(patches)
-	score_matrix = np.empty((n, 4, n, 4), dtype=float)
-	with mp.Pool() as pool:
-		gen = DissimilarityScorePtMpGenerator(patches, predictions_matrix)
-		result_generator = pool.imap_unordered(norm_l1_mp, gen)
-		with tqdm(total=len(gen)) as progress_bar:
-			for (patch1_index, r1, patch2_index, r2), score in result_generator:
-				score_matrix[patch1_index, r1, patch2_index, r2] = score
-				progress_bar.update()
+	if rotations_shuffled:
+		score_matrix = np.empty((n, 4, n, 4), dtype=float)
+		with mp.Pool() as pool:
+			gen = DissimilarityScorePtMpGenerator(patches, predictions_matrix, rotations_shuffled)
+			result_generator = pool.imap_unordered(norm_l1_mp, gen)
+			with tqdm(total=len(gen)) as progress_bar:
+				for (patch1_index, r1, patch2_index, r2), score in result_generator:
+					score_matrix[patch1_index, r1, patch2_index, r2] = score
+					progress_bar.update()
+	else:
+		score_matrix = np.empty((n, 4, n), dtype=float)
+		with mp.Pool() as pool:
+			gen = DissimilarityScorePtMpGenerator(patches, predictions_matrix, rotations_shuffled)
+			result_generator = pool.imap_unordered(norm_l1_mp, gen)
+			with tqdm(total=len(gen)) as progress_bar:
+				for (patch1_index, r1, patch2_index), score in result_generator:
+					score_matrix[patch1_index, r1, patch2_index] = score
+					progress_bar.update()
 	return score_matrix
 
 
@@ -301,16 +319,17 @@ def pick_first_piece(buddy_matrix: np.ndarray, compatibility_scores: np.ndarray,
 	return best_index
 
 
-def jigsaw_pt(patches: list):
+def jigsaw_pt(patches: list, rotations_shuffled: bool = True):
 	"""
 	takes a list of square patches and uses Paikin and Tal's algorithm to assemble the patches
 	:param patches: a list of numpy arrays representing the scrambled patches of the original image
+	:param rotations_shuffled: indicates if the patches have been rotated randomly (vs all being rotated correctly to start with)
 	:return: the re-assembled image as a numpy array of shape (r, c, 3)
 	"""
 	print("computing 3rd pixel predictions...")
 	predictions_matrix = get_3rd_pixel_predictions(patches)
 	print("computing dissimilarity scores...")
-	dissimilarity_scores = get_dissimilarity_scores(patches, predictions_matrix)
+	dissimilarity_scores = get_dissimilarity_scores(patches, predictions_matrix, rotations_shuffled)
 	print("computing best neighbors...")
 	best_neighbors = get_best_neighbors(dissimilarity_scores)
 	print("computing initial compatibility scores...")
