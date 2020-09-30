@@ -17,20 +17,20 @@ def verify_accuracy(original, reconstructed, shuffle_dictionary, dimensions): # 
     location_accuracy = 0
     best_rotation = 0
     for rotation in range(4):
-        rotated_matrices[rotation] = block_rot90(original_mapped, rotation)
+        rotated_matrices[rotation] = block_rot90(original_mapped, rotation).copy()
 
-    for rotation in range(4):
-        rotated_orig = rotated_matrices[rotation]
+    for rot in range(4):
+        rotated_orig = rotated_matrices[rot]
         abs_accuracy = absolute_accuracy(rotated_orig, reconstructed)
         # accuracy_bon = absolute_accuracy_placement_bonus(rotated_orig, reconstructed)
         # print("placement bonus accuracy: " + str(accuracy_bon))
         if abs_accuracy > max_accuracy_abs:
             max_accuracy_abs = abs_accuracy
-            best_rotation = rotation
+            best_rotation = rot
             location_accuracy = absolute_accuracy_placement_only(rotated_orig, reconstructed)
     print("best rotation absolute: " + str(best_rotation))
 
-    for rotation in range(4):
+    for rotation in range(4): #needs to go through all rotations because function checks fixed order of surrounding squares
         rotated_orig = rotated_matrices[rotation]
         rel_accuracy = relative_accuracy(rotated_orig, reconstructed)
         if rel_accuracy > max_accuracy_rel:
@@ -81,13 +81,12 @@ def absolute_accuracy_placement_bonus(correct, reconstructed):
     return score / num_squares
 
 
-#todo- why do the rotations of reconstructed matter?
 def relative_accuracy(correct, reconstructed):
     # percentage of correct edge pairings
     score = 0
     incorrect = 0
-    num_rows = min(correct.shape[0], reconstructed.shape[0])
-    num_cols = min(correct.shape[1], reconstructed.shape[1])
+    num_rows = correct.shape[0]
+    num_cols = correct.shape[1]
     num_edges_total = correct.shape[0] * correct.shape[1] * 4
 
     for i in range(num_rows):
@@ -96,11 +95,12 @@ def relative_accuracy(correct, reconstructed):
             row_recon, col_recon = find_index_match(index_correct, reconstructed) # find index in reconstruction matrix that matches this index
 
             rotated = reconstructed #name?
-            rotation_difference = reconstructed[row_recon][col_recon][1] - correct[i][j][1] % 4
+            rotation_difference = (correct[i][j][1] - reconstructed[row_recon][col_recon][1]) % 4
             if rotation_difference != 0:
                 rotated = block_rot90(reconstructed, rotation_difference)
                 row_recon, col_recon = coord_rot90(row_recon, col_recon, reconstructed.shape[0],
                                                    reconstructed.shape[1], rotation_difference)
+            assert(np.all(rotated[row_recon][col_recon] == correct[i][j]))
 
             correct_edges = [[-1, -1]] * 4
             if i > 0:
@@ -123,12 +123,12 @@ def relative_accuracy(correct, reconstructed):
                 reconstructed_edges[3] = rotated[row_recon][col_recon - 1]
 
             for edge in range(len(correct_edges)):
-                if np.all(correct_edges[edge] == reconstructed_edges[edge]):
+                if np.all(correct_edges[edge] == reconstructed_edges[edge]) or \
+                        (correct_edges[edge][0] == -1 and reconstructed_edges[edge][0] == -1): #rotation doesn't matter if it's a blank piece
                     score += 1
-                else:
-                    incorrect += 1
+                # else:
+                #     incorrect += 1
     # print("incorrect edges: " + str(incorrect))
-    # print("score relative!: " + str(score / num_edges_total))
     return score / num_edges_total
 
 
