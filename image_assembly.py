@@ -2,7 +2,7 @@ import copy
 import datetime
 import numpy as np
 import random
-from functions import assemble_patches, load_image_from_disk, show_image
+from functions import assemble_patches, load_image_from_disk, show_image, block_rot90
 from kruskal import jigsaw_kruskals, assemble_image_kruskal
 from accuracy import verify_accuracy
 from prim import jigsaw_prims
@@ -101,7 +101,7 @@ if __name__ == "__main__":
 	print(f"algorithm end time: {datetime.datetime.now()}")
 	if reconstructed_image is not None:
 		show_image(reconstructed_image, "final answer")
-		accuracy, location_accuracy, relative_accuracy = verify_accuracy(original_patched, reconstruction_matrix, shuffle_dictionary, dimensions)
+		accuracy, location_accuracy, relative_accuracy = verify_accuracy(reconstruction_matrix, shuffle_dictionary, dimensions)
 		show_image(reconstructed_image, "final answer")
 		print("Absolute accuracy: " + str(accuracy * 100) + "%")
 		print("with " + str(location_accuracy * 100) + "% in the correct position")
