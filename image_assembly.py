@@ -2,7 +2,7 @@ import copy
 import datetime
 import numpy as np
 import random
-from functions import assemble_patches, load_image_from_disk, show_image, block_rot90
+from functions import assemble_patches, load_image_from_disk, show_image
 from kruskal import jigsaw_kruskals, assemble_image_kruskal
 from accuracy import verify_accuracy
 from prim import jigsaw_prims

@@ -3,6 +3,14 @@ from functions import block_rot90, coord_rot90
 
 
 def verify_accuracy(reconstructed, shuffle_dictionary, dimensions):
+    '''
+    Makes correct reconstruction matrix based on shuffle dictionary and dimensions,
+    calls absolute and relative accuracy functions
+    :param reconstructed: Reconstruction matrix
+    :param shuffle_dictionary: Dictionary that maps where from the shuffled pieces to the correct position
+    :param dimensions: dimensions the correct matrix should be
+    :return: absolute accuracy, absolute position only accuracy, relative accuracy
+    '''
     num_rows = dimensions[0]
     num_columns = dimensions[1]
     correct_reconstructed = np.zeros((num_rows, num_columns, 2), dtype=int)
@@ -32,7 +40,12 @@ def verify_accuracy(reconstructed, shuffle_dictionary, dimensions):
 
 
 def absolute_accuracy(correct, reconstructed):
-    # what percent of the squares have the right piece with right rotation
+    '''
+    Calculates absolute accuracy of the reconstruction matrix
+    :param correct: Correct reconstruction matrix
+    :param reconstructed: Reconstruction matrix to evaluate its accuracy
+    :return: percent of pieces that are in the correct location with the correct rotation
+    '''
     num_rows = min(correct.shape[0], reconstructed.shape[0])
     num_cols = min(correct.shape[1], reconstructed.shape[1])
     score = 0
@@ -47,6 +60,12 @@ def absolute_accuracy(correct, reconstructed):
 
 
 def absolute_accuracy_placement_only(correct, reconstructed):
+    '''
+    Calculates accuracy based on absolute position only
+    :param correct: Correct reconstruction matrix
+    :param reconstructed: Reconstruction matrix to evaluate its accuracy
+    :return: Percentage of pieces in the correct location (doesn't consider rotation)
+    '''
     score = 0
     num_rows = min(correct.shape[0], reconstructed.shape[0])
     num_cols = min(correct.shape[1], reconstructed.shape[1])
@@ -59,13 +78,19 @@ def absolute_accuracy_placement_only(correct, reconstructed):
 
 
 def absolute_accuracy_placement_bonus(correct, reconstructed):
+    '''
+    Calculates accuracy based on position and location
+    :param correct: Correct reconstruction matrix
+    :param reconstructed: Reconstruction matrix to evaluate its accuracy
+    :return: Percentage of pieces in the correct location (half credit) or in correct location with correct rotation
+    '''
     score = 0
     num_squares = correct.shape[0] * correct.shape[1]
     for i in range(correct.shape[0]):
         for j in range(correct.shape[1]):
             if correct[i][j][0] == reconstructed[i][j][0]:
                 score += 0.5
-                if correct[i][j][1] == reconstructed[i][j][1]: #inside if?
+                if correct[i][j][1] == reconstructed[i][j][1]:
                     score += 0.5
     return score / num_squares
 
@@ -80,10 +105,11 @@ def relative_accuracy(correct, reconstructed):
                 and in the correct rotation relative to each other
     '''
     score = 0
-    incorrect = 0
+    # incorrect = 0
     num_rows = correct.shape[0]
     num_cols = correct.shape[1]
     num_edges_total = correct.shape[0] * correct.shape[1] * 4
+    good_rotations = [0] * 4
 
     for i in range(num_rows):
         for j in range(num_cols): # for each square in correct
@@ -122,16 +148,23 @@ def relative_accuracy(correct, reconstructed):
                 if np.all(correct_edges[edge] == reconstructed_edges[edge]) or \
                         (correct_edges[edge][0] == -1 and reconstructed_edges[edge][0] == -1): #rotation doesn't matter if it's a blank piece
                     score += 1
+                    good_rotations[rotation_difference] += 1
                 # else:
                 #     incorrect += 1
     # print("incorrect edges: " + str(incorrect))
-    # print("rel: " + str(score/num_edges_total))
-    return score / num_edges_total  #todo return most frequent rotation
+    print("best rotation rel: " + str((4 - good_rotations.index(max(good_rotations))) % 4))
+    return score / num_edges_total
 
 
-def find_index_match(index_to_find, matrix):
+def find_index_match(value_to_find, matrix):
+    '''
+    Finds the row and column in a matrix where the first value in the array stored matches value_to_find
+    :param value_to_find: Number to find in matrix (first position of array)
+    :param matrix: Matrix to search
+    :return: Returns row and column in matrix, or "not found"
+    '''
     for row in range(matrix.shape[0]):
         for col in range(matrix.shape[1]):
-            if matrix[row][col][0] == index_to_find:
+            if matrix[row][col][0] == value_to_find:
                 return row, col
     return "not found"
