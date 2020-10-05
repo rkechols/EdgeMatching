@@ -381,6 +381,22 @@ def pick_first_piece(buddy_matrix: np.ndarray, compatibility_scores: np.ndarray,
 			best_index = i
 	return best_index
 
+def solve_puzzle(patches,first_piece,dissimilarity_scores: np.ndarray, compatibility_scores: np.ndarray, buddy_matrix: np.ndarray, rotations_shuffled: bool):
+	#need to add first piece to the puzzle
+	#need to correctly make the new puzzle (the one we're going to add pieces to one piece at a time) with the right dimensions etc.
+	#need to make a potential pool which adds all the best buddies of the last piece placed
+	#then edge with best compatibility score is added to the puzzle
+	#if the pool is empty, we have to re score best buddy matrix and exclude pieces that have already been placed
+	#continue the process until all pieces have been placed
+	print(patches)
+
+	puzzle = []
+	potential_pool = []
+	best_first_piece = buddy_matrix[first_piece]
+	potential_pool.append(best_first_piece)
+
+	return puzzle
+
 
 def jigsaw_pt(patches: list, rotations_shuffled: bool = True):
 	"""
@@ -402,5 +418,6 @@ def jigsaw_pt(patches: list, rotations_shuffled: bool = True):
 	print("selecting first piece...")
 	first_piece = pick_first_piece(buddy_matrix, compatibility_scores, best_neighbors, rotations_shuffled)
 	print(f"first piece selected: {first_piece}")
-	# TODO: actually implement the body of the algorithm
+	# TODO: actually implement the body of the algorithm (added solve_puzzle function for this below)
+	solved_puzzle = solve_puzzle(patches,first_piece,dissimilarity_scores,compatibility_scores,buddy_matrix,rotations_shuffled)
 	return None
