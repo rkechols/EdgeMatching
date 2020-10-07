@@ -84,7 +84,7 @@ def compare_images(image1: np.ndarray, image2: np.ndarray):
 
 
 if __name__ == "__main__":
-	original_image = load_image_from_disk("TestImages/shrek.jpg")
+	original_image = load_image_from_disk("TestImages/Giraffe.jpg ")
 	show_image(original_image, "original")
 	# ps = original_image.shape[1] // 2
 	ps = 28
