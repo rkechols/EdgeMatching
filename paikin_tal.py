@@ -3,7 +3,7 @@
 
 import multiprocessing as mp
 import numpy as np
-from constants import INFINITY
+from constants import INFINITY, NO_PIECE, EXPANSION_SPACE, YES_PIECE
 from tqdm import tqdm
 
 
@@ -386,6 +386,7 @@ def solve_puzzle(patches,first_piece,dissimilarity_scores: np.ndarray, compatibi
 	#need to correctly make the new puzzle (the one we're going to add pieces to one piece at a time) with the right dimensions etc.
 	#need to make a potential pool which adds all the best buddies of the last piece placed
 	#then edge with best compatibility score is added to the puzzle
+	# construction_matrix needs to then be updated and reconstruction_matrix may need to have size updated
 	#if the pool is empty, we have to re score best buddy matrix and exclude pieces that have already been placed
 	#continue the process until all pieces have been placed
 	print(patches)
@@ -395,7 +396,13 @@ def solve_puzzle(patches,first_piece,dissimilarity_scores: np.ndarray, compatibi
 	best_first_piece = buddy_matrix[first_piece]
 	potential_pool.append(best_first_piece)
 
-	return puzzle
+	construction_matrix = np.array([[NO_PIECE, EXPANSION_SPACE, NO_PIECE],
+									[EXPANSION_SPACE, YES_PIECE, EXPANSION_SPACE],
+									[NO_PIECE, EXPANSION_SPACE, NO_PIECE]])
+	reconstruction_matrix = np.zeros((3, 3, 2), dtype=int)
+	reconstruction_matrix[1][1] = [first_piece, 0] #Add the first piece (I think this is correct..) 0 refers to the rotation
+
+	return reconstruction_matrix
 
 
 def jigsaw_pt(patches: list, rotations_shuffled: bool = True):
