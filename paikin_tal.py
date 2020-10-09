@@ -395,12 +395,56 @@ def solve_puzzle(patches,first_piece,dissimilarity_scores: np.ndarray, compatibi
 	potential_pool = []
 	best_first_piece = buddy_matrix[first_piece]
 	potential_pool.append(best_first_piece)
-
+	pieces_remaining = buddy_matrix.shape[0]
 	construction_matrix = np.array([[NO_PIECE, EXPANSION_SPACE, NO_PIECE],
 									[EXPANSION_SPACE, YES_PIECE, EXPANSION_SPACE],
 									[NO_PIECE, EXPANSION_SPACE, NO_PIECE]])
 	reconstruction_matrix = np.zeros((3, 3, 2), dtype=int)
 	reconstruction_matrix[1][1] = [first_piece, 0] #Add the first piece (I think this is correct..) 0 refers to the rotation
+	pieces_remaining -= 1
+
+	while pieces_remaining > 0:
+		# todo find next piece, location to put
+		row = 0
+		col = 0
+		piece = 0
+
+		reconstruction_matrix[row][col] = [piece, 0]
+		construction_matrix[row][col] = YES_PIECE
+		pieces_remaining -= 1
+
+		# resize reconstruction and construction matrices
+		if row == 0 or row == construction_matrix.shape[0] - 1:
+			new_scores_row = np.zeros((1, reconstruction_matrix.shape[1], 2), dtype=int)
+			new_construction_row = np.empty((1, construction_matrix.shape[1]), dtype=int)
+			new_construction_row[:, :] = NO_PIECE
+			if row == 0:  # we placed one on the top row
+				reconstruction_matrix = np.concatenate((new_scores_row, reconstruction_matrix), axis=0)
+				construction_matrix = np.concatenate((new_construction_row, construction_matrix), axis=0)
+				row += 1
+			else:  # we placed one on the bottom row
+				reconstruction_matrix = np.concatenate((reconstruction_matrix, new_scores_row), axis=0)
+				construction_matrix = np.concatenate((construction_matrix, new_construction_row), axis=0)
+		if col == 0 or col == construction_matrix.shape[1] - 1:
+			new_scores_col = np.zeros((reconstruction_matrix.shape[0], 1, 2), dtype=int)
+			new_construction_col = np.empty((construction_matrix.shape[0], 1), dtype=int)
+			new_construction_col[:, :] = NO_PIECE
+			if col == 0:  # we placed one on the left column
+				reconstruction_matrix = np.concatenate((new_scores_col, reconstruction_matrix), axis=1)
+				construction_matrix = np.concatenate((new_construction_col, construction_matrix), axis=1)
+				col += 1
+			else:  # we placed one on the bottom row
+				reconstruction_matrix = np.concatenate((reconstruction_matrix, new_scores_col), axis=1)
+				construction_matrix = np.concatenate((construction_matrix, new_construction_col), axis=1)
+		# check and update the neighbors of the newly placed patch
+		for row_shift in [-1, 1]:
+			if construction_matrix[row + row_shift, col] == NO_PIECE:
+				construction_matrix[row + row_shift, col] = EXPANSION_SPACE
+		for col_shift in [-1, 1]:
+			if construction_matrix[row, col + col_shift] == NO_PIECE:
+				construction_matrix[row, col + col_shift] = EXPANSION_SPACE
+
+	# trim matrices at end
 
 	return reconstruction_matrix
 
