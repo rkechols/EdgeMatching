@@ -381,7 +381,9 @@ def pick_first_piece(buddy_matrix: np.ndarray, compatibility_scores: np.ndarray,
 			best_index = i
 	return best_index
 
-def solve_puzzle(patches,first_piece,dissimilarity_scores: np.ndarray, compatibility_scores: np.ndarray, buddy_matrix: np.ndarray, rotations_shuffled: bool):
+
+def solve_puzzle(patches, first_piece, dissimilarity_scores: np.ndarray, compatibility_scores: np.ndarray,
+				 buddy_matrix: np.ndarray, rotations_shuffled: bool):
 	#need to add first piece to the puzzle
 	#need to correctly make the new puzzle (the one we're going to add pieces to one piece at a time) with the right dimensions etc.
 	#need to make a potential pool which adds all the best buddies of the last piece placed
@@ -391,7 +393,6 @@ def solve_puzzle(patches,first_piece,dissimilarity_scores: np.ndarray, compatibi
 	#continue the process until all pieces have been placed
 	print(patches)
 
-	puzzle = []
 	potential_pool = []
 	best_first_piece = buddy_matrix[first_piece]
 	potential_pool.append(best_first_piece)
@@ -400,18 +401,26 @@ def solve_puzzle(patches,first_piece,dissimilarity_scores: np.ndarray, compatibi
 									[EXPANSION_SPACE, YES_PIECE, EXPANSION_SPACE],
 									[NO_PIECE, EXPANSION_SPACE, NO_PIECE]])
 	reconstruction_matrix = np.zeros((3, 3, 2), dtype=int)
-	reconstruction_matrix[1][1] = [first_piece, 0] #Add the first piece (I think this is correct..) 0 refers to the rotation
+	reconstruction_matrix[1][1] = [first_piece, 0]  # Add the first piece (I think this is correct..) 0 refers to the rotation
 	pieces_remaining -= 1
 
 	while pieces_remaining > 0:
+		# if len(potential_pool) > 0:
+			# extract the best candidate from the pool
+		# else:
+			# recalculate the compatibility function
+			# find the best neighbors (not best buddies)
+
 		# todo find next piece, location to put
 		row = 0
 		col = 0
 		piece = 0
-
+		# place piece found
 		reconstruction_matrix[row][col] = [piece, 0]
 		construction_matrix[row][col] = YES_PIECE
 		pieces_remaining -= 1
+
+		# add best buddies of piece to the pool
 
 		# resize reconstruction and construction matrices
 		if row == 0 or row == construction_matrix.shape[0] - 1:
@@ -470,5 +479,5 @@ def jigsaw_pt(patches: list, rotations_shuffled: bool = True):
 	first_piece = pick_first_piece(buddy_matrix, compatibility_scores, best_neighbors, rotations_shuffled)
 	print(f"first piece selected: {first_piece}")
 	# TODO: actually implement the body of the algorithm (added solve_puzzle function for this below)
-	solved_puzzle = solve_puzzle(patches,first_piece,dissimilarity_scores,compatibility_scores,buddy_matrix,rotations_shuffled)
+	solved_puzzle = solve_puzzle(patches, first_piece, dissimilarity_scores, compatibility_scores, buddy_matrix, rotations_shuffled)
 	return None
