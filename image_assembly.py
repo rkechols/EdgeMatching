@@ -60,7 +60,7 @@ def scramble_image(patches: list, seed: int = None, rotation_shuffle: bool = Tru
 			patches_scrambled.append(np.rot90(patches[new], r))
 	else:
 		for original, new in zip(all_indices, all_indices_shuffled):
-			shuffle_dict[new] = original
+			shuffle_dict[new] = (original, 0)
 			patches_scrambled.append(patches[new])
 
 	return patches_scrambled, shuffle_dict
