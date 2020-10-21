@@ -2,8 +2,8 @@ import copy
 import datetime
 import numpy as np
 import random
-from functions import assemble_patches, load_image_from_disk, show_image
-from kruskal import jigsaw_kruskals, assemble_image_kruskal
+from functions import assemble_patches, load_image_from_disk, show_image, assemble_image
+from kruskal import jigsaw_kruskals
 from paikin_tal import jigsaw_pt
 from accuracy import verify_accuracy
 from prim import jigsaw_prims
@@ -110,12 +110,13 @@ if __name__ == "__main__":
 	# hypothetical_max = 255 - (14.235 * math.log(ps))
 	print(f"algorithm start time: {datetime.datetime.now()}")
 	# reconstruction_matrix = jigsaw_kruskals(patch_list)
-	# reconstructed_image = assemble_image_kruskal(patch_list, reconstruction_matrix)
+	# reconstructed_image = assemble_image(patch_list, reconstruction_matrix)
 	# reconstructed_image = jigsaw_prims(patch_list)
 	reconstruction_matrix = jigsaw_pt(patch_list, rotations_shuffled=rotations)
-	reconstructed_image = assemble_image_kruskal(patch_list, reconstruction_matrix) # use/move same function?
-	print(f"algorithm end time: {datetime.datetime.now()}")
-	if reconstructed_image is not None:
+
+	if reconstruction_matrix is not None:
+		reconstructed_image = assemble_image(patch_list, reconstruction_matrix)
+		print(f"algorithm end time: {datetime.datetime.now()}")
 		show_image(reconstructed_image, "final answer")
 		accuracy, location_accuracy, relative_accuracy = verify_accuracy(reconstruction_matrix, shuffle_dictionary, dimensions)
 		show_image(reconstructed_image, "final answer")
