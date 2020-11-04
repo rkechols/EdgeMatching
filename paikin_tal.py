@@ -47,14 +47,6 @@ class Predict3rdPixelMpGenerator:
 		return n * 4
 
 
-class PoolCandidate:
-	def __init__(self, score: float, index: int, row: int, col: int):
-		self.score = score
-		self.index = index
-		self.row = row
-		self.col = col
-
-
 def get_3rd_pixel_predictions(patches: list) -> np.ndarray:
 	"""
 	TODO
@@ -390,18 +382,31 @@ def pick_first_piece(buddy_matrix: np.ndarray, compatibility_scores: np.ndarray,
 	return best_index
 
 
+class PoolCandidate:
+	def __init__(self, score: float, index: int, row: int, col: int):
+		self.score = score
+		self.index = index
+		self.row = row
+		self.col = col
+
+	def __lt__(self, other):
+		if not isinstance(other, PoolCandidate):
+			raise ValueError("class PoolCandidate cannot be compared to an object of any other type")
+		return self.score > other.score  # reversed for a MAX heap
+
+
 def solve_puzzle(patches, first_piece, dissimilarity_scores: np.ndarray, compatibility_scores: np.ndarray,
-				 buddy_matrix: np.ndarray, rotations_shuffled: bool):
-	#need to add first piece to the puzzle
-	#need to correctly make the new puzzle (the one we're going to add pieces to one piece at a time) with the right dimensions etc.
-	#need to make a potential pool which adds all the best buddies of the last piece placed
-	#then edge with best compatibility score is added to the puzzle
+                 buddy_matrix: np.ndarray, rotations_shuffled: bool):
+	# need to add first piece to the puzzle
+	# need to correctly make the new puzzle (the one we're going to add pieces to one piece at a time) with the right dimensions etc.
+	# need to make a potential pool which adds all the best buddies of the last piece placed
+	# then edge with best compatibility score is added to the puzzle
 	# construction_matrix needs to then be updated and reconstruction_matrix may need to have size updated
-	#if the pool is empty, we have to re score best buddy matrix and exclude pieces that have already been placed
-	#continue the process until all pieces have been placed
+	# if the pool is empty, we have to re score best buddy matrix and exclude pieces that have already been placed
+	# continue the process until all pieces have been placed
 	print(patches)
 
-	potential_pool = [] #array of PoolCandidates
+	potential_pool = list()  # max heap of PoolCandidates
 	pieces_placed = set()
 
 	best_first_piece = buddy_matrix[first_piece]
@@ -425,21 +430,20 @@ def solve_puzzle(patches, first_piece, dissimilarity_scores: np.ndarray, compati
 			pieces_placed.add(piece_index)
 			pieces_remaining -= 1
 
-			# todo put buddies into the pool buddies3
-		else: #pool is empty
+		# todo put buddies into the pool buddies3
+		else:  # pool is empty
 			# recalculate the compatibility function
 			# find the best neighbors (not best buddies)
 			best_neighbors = get_best_neighbors(dissimilarity_scores, rotations_shuffled)
 			compatibility_scores = get_compatibility_scores(dissimilarity_scores, best_neighbors, rotations_shuffled)
 			buddy_matrix = get_best_buddies(compatibility_scores, rotations_shuffled)
-			# do something here??
+		# do something here??
 
 	# todo trim matrices at end?
 	return reconstruction_matrix
 
 
 def adjust_matrices(row, col, reconstruction_matrix, construction_matrix, pool):
-
 	construction_matrix[row][col] = YES_PIECE
 	# resize reconstruction and construction matrices
 	if row == 0 or row == construction_matrix.shape[0] - 1:
