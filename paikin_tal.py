@@ -2,6 +2,7 @@
 
 
 import multiprocessing as mp
+from typing import List, Tuple
 import numpy as np
 from constants import INFINITY, NO_PIECE, EXPANSION_SPACE, YES_PIECE
 from tqdm import tqdm
@@ -26,14 +27,14 @@ def predict_3rd_pixel(col1: np.ndarray, col2: np.ndarray) -> np.ndarray:
 	return expected
 
 
-def predict_3rd_pixel_mp(coord_last_columns: (tuple, np.ndarray, np.ndarray)) -> (tuple, np.ndarray):
+def predict_3rd_pixel_mp(coord_last_columns: Tuple[Tuple[int, int], np.ndarray, np.ndarray]) -> Tuple[Tuple[int, int], np.ndarray]:
 	coord, col1, col2 = coord_last_columns
 	return coord, predict_3rd_pixel(col1, col2)
 
 
 # generates input for predict_3rd_pixel_mp()
 class Predict3rdPixelMpGenerator:
-	def __init__(self, patches: list):
+	def __init__(self, patches: List[np.ndarray]):
 		self.patches = patches
 
 	def __iter__(self):
@@ -47,7 +48,7 @@ class Predict3rdPixelMpGenerator:
 		return n * 4
 
 
-def get_3rd_pixel_predictions(patches: list) -> np.ndarray:
+def get_3rd_pixel_predictions(patches: List[np.ndarray]) -> np.ndarray:
 	"""
 	TODO
 	:param patches:
@@ -76,7 +77,7 @@ def norm_l1(col1: np.ndarray, col2: np.ndarray) -> int:
 	return sum(diff_col.flatten())
 
 
-def norm_l1_mp(coord_and_columns: (tuple, np.ndarray, np.ndarray)) -> (tuple, float):
+def norm_l1_mp(coord_and_columns: Tuple[Tuple[int, int, int], np.ndarray, np.ndarray]) -> Tuple[Tuple[int, int, int], float]:
 	# for use with the multiprocessing library
 	t, predicted, actual, = coord_and_columns
 	if t[0] == t[2]:  # same patch
@@ -88,7 +89,7 @@ def norm_l1_mp(coord_and_columns: (tuple, np.ndarray, np.ndarray)) -> (tuple, fl
 
 # generates input for dissimilarity_score_pt_mp()
 class DissimilarityScorePtMpGenerator:
-	def __init__(self, patches: list, predictions_matrix: np.ndarray, rotations_shuffled: bool = True):
+	def __init__(self, patches: List[np.ndarray], predictions_matrix: np.ndarray, rotations_shuffled: bool = True):
 		self.patches = patches
 		self.predictions = predictions_matrix
 		self.rotations_shuffled = rotations_shuffled
@@ -106,7 +107,7 @@ class DissimilarityScorePtMpGenerator:
 					else:
 						yield (patch1_index, r1, patch2_index), predicted_column, np.rot90(patch2, r1)[:, 0, :]
 
-	def __len__(self):
+	def __len__(self) -> int:
 		n = len(self.patches)
 		if self.rotations_shuffled:
 			return n * 4 * n * 4
@@ -114,7 +115,7 @@ class DissimilarityScorePtMpGenerator:
 			return n * 4 * n
 
 
-def get_dissimilarity_scores(patches: list, predictions_matrix: np.ndarray, rotations_shuffled: bool = True) -> np.ndarray:
+def get_dissimilarity_scores(patches: List[np.ndarray], predictions_matrix: np.ndarray, rotations_shuffled: bool = True) -> np.ndarray:
 	"""
 	takes a list of scrambled patches and creates a matrix that gives dissimilarity scores to each possible pairing of patches
 	:param patches: list of square numpy arrays, each of the same shape (x, x, 3); the list's length is referred to as n
@@ -203,7 +204,7 @@ def compatibility_score(dissimilarity_scores: np.ndarray, best_neighbors: np.nda
 	return scores_to_return
 
 
-def compatibility_score_mp(coord_and_dissimilarities: (tuple, np.ndarray, np.ndarray, bool)) -> (tuple, np.ndarray):
+def compatibility_score_mp(coord_and_dissimilarities: Tuple[Tuple[int, int], np.ndarray, np.ndarray, bool]) -> Tuple[Tuple[int, int], np.ndarray]:
 	# for use with the multiprocessing library
 	(patch_index, r), dissimilarity_scores, best_neighbors, rotations_shuffled = coord_and_dissimilarities
 	compatibility_scores = compatibility_score(dissimilarity_scores, best_neighbors, patch_index, r, rotations_shuffled)
@@ -389,14 +390,13 @@ class PoolCandidate:
 		self.row = row
 		self.col = col
 
-	def __lt__(self, other):
+	def __lt__(self, other) -> bool:
 		if not isinstance(other, PoolCandidate):
-			raise ValueError("class PoolCandidate cannot be compared to an object of any other type")
+			raise ValueError(f"class PoolCandidate cannot be compared to an object of type {other.__class__.__name__}")
 		return self.score > other.score  # reversed for a MAX heap
 
 
-def solve_puzzle(patches, first_piece, dissimilarity_scores: np.ndarray, compatibility_scores: np.ndarray,
-                 buddy_matrix: np.ndarray, rotations_shuffled: bool):
+def solve_puzzle(patches: List[np.ndarray], first_piece: int, dissimilarity_scores: np.ndarray, compatibility_scores: np.ndarray, buddy_matrix: np.ndarray, rotations_shuffled: bool) -> np.ndarray:
 	# need to add first piece to the puzzle
 	# need to correctly make the new puzzle (the one we're going to add pieces to one piece at a time) with the right dimensions etc.
 	# need to make a potential pool which adds all the best buddies of the last piece placed
@@ -416,7 +416,7 @@ def solve_puzzle(patches, first_piece, dissimilarity_scores: np.ndarray, compati
 									[EXPANSION_SPACE, YES_PIECE, EXPANSION_SPACE],
 									[NO_PIECE, EXPANSION_SPACE, NO_PIECE]])
 	reconstruction_matrix = np.zeros((3, 3, 2), dtype=int)
-	reconstruction_matrix[1][1] = [first_piece, 0]  # Add the first piece, 0 refers to the rotation
+	reconstruction_matrix[1, 1] = [first_piece, 0]  # Add the first piece, 0 refers to the rotation
 	pieces_remaining -= 1
 
 	while pieces_remaining > 0:
@@ -425,7 +425,7 @@ def solve_puzzle(patches, first_piece, dissimilarity_scores: np.ndarray, compati
 			piece_index = 0
 			row, col = 0, 0
 			# place piece found
-			reconstruction_matrix[row][col] = [piece_index, 0]
+			reconstruction_matrix[row, col] = [piece_index, 0]
 			adjust_matrices(row, col, reconstruction_matrix, construction_matrix, potential_pool)
 			pieces_placed.add(piece_index)
 			pieces_remaining -= 1
@@ -443,8 +443,8 @@ def solve_puzzle(patches, first_piece, dissimilarity_scores: np.ndarray, compati
 	return reconstruction_matrix
 
 
-def adjust_matrices(row, col, reconstruction_matrix, construction_matrix, pool):
-	construction_matrix[row][col] = YES_PIECE
+def adjust_matrices(row: int, col: int, reconstruction_matrix: np.ndarray, construction_matrix: np.ndarray, pool: List[PoolCandidate]) -> np.ndarray:
+	construction_matrix[row, col] = YES_PIECE
 	# resize reconstruction and construction matrices
 	if row == 0 or row == construction_matrix.shape[0] - 1:
 		new_scores_row = np.zeros((1, reconstruction_matrix.shape[1], 2), dtype=int)
@@ -479,14 +479,15 @@ def adjust_matrices(row, col, reconstruction_matrix, construction_matrix, pool):
 	for col_shift in [-1, 1]:
 		if construction_matrix[row, col + col_shift] == NO_PIECE:
 			construction_matrix[row, col + col_shift] = EXPANSION_SPACE
+	return reconstruction_matrix
 
 
-def jigsaw_pt(patches: list, rotations_shuffled: bool = True):
+def jigsaw_pt(patches: List[np.ndarray], rotations_shuffled: bool = True) -> np.ndarray:
 	"""
 	takes a list of square patches and uses Paikin and Tal's algorithm to assemble the patches
 	:param patches: a list of numpy arrays representing the scrambled patches of the original image
 	:param rotations_shuffled: indicates if the patches have been rotated randomly (vs all being rotated correctly to start with)
-	:return: the re-assembled image as a numpy array of shape (r, c, 3)
+	:return: the reconstruction matrix as a numpy array of shape (r, c, 2)
 	"""
 	print("computing 3rd pixel predictions...")
 	predictions_matrix = get_3rd_pixel_predictions(patches)
@@ -501,6 +502,5 @@ def jigsaw_pt(patches: list, rotations_shuffled: bool = True):
 	print("selecting first piece...")
 	first_piece = pick_first_piece(buddy_matrix, compatibility_scores, best_neighbors, rotations_shuffled)
 	print(f"first piece selected: {first_piece}")
-	# TODO: actually implement the body of the algorithm (added solve_puzzle function for this below)
-	solved_puzzle = solve_puzzle(patches, first_piece, dissimilarity_scores, compatibility_scores, buddy_matrix, rotations_shuffled)
-	return None
+	print("running main placement loop...")
+	return solve_puzzle(patches, first_piece, dissimilarity_scores, compatibility_scores, buddy_matrix, rotations_shuffled)
