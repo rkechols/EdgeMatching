@@ -47,6 +47,14 @@ class Predict3rdPixelMpGenerator:
 		return n * 4
 
 
+class PoolCandidate:
+	def __init__(self, score: float, index: int, row: int, col: int):
+		self.score = score
+		self.index = index
+		self.row = row
+		self.col = col
+
+
 def get_3rd_pixel_predictions(patches: list) -> np.ndarray:
 	"""
 	TODO
@@ -393,11 +401,11 @@ def solve_puzzle(patches, first_piece, dissimilarity_scores: np.ndarray, compati
 	#continue the process until all pieces have been placed
 	print(patches)
 
-	potential_pool = []
+	potential_pool = [] #array of PoolCandidates
 	pieces_placed = set()
 
 	best_first_piece = buddy_matrix[first_piece]
-	potential_pool.append(best_first_piece)
+	# todo addBuddies3 of first piece
 	pieces_remaining = buddy_matrix.shape[0]
 	construction_matrix = np.array([[NO_PIECE, EXPANSION_SPACE, NO_PIECE],
 									[EXPANSION_SPACE, YES_PIECE, EXPANSION_SPACE],
@@ -407,41 +415,40 @@ def solve_puzzle(patches, first_piece, dissimilarity_scores: np.ndarray, compati
 	pieces_remaining -= 1
 
 	while pieces_remaining > 0:
-		if len(potential_pool) == 0:
+		if len(potential_pool) > 0:
+			# todo get next piece out of pool, find if canAddPiece
+			piece_index = 0
+			row, col = 0, 0
+			# place piece found
+			reconstruction_matrix[row][col] = [piece_index, 0]
+			adjust_matrices(row, col, reconstruction_matrix, construction_matrix, potential_pool)
+			pieces_placed.add(piece_index)
+			pieces_remaining -= 1
+
+			# todo put buddies into the pool buddies3
+		else: #pool is empty
 			# recalculate the compatibility function
 			# find the best neighbors (not best buddies)
-			best_neighbors = get_best_neighbors(dissimilarity_scores, rotations_shuffled)  # todo pass in which pieces have already been placed to these functions
+			best_neighbors = get_best_neighbors(dissimilarity_scores, rotations_shuffled)
 			compatibility_scores = get_compatibility_scores(dissimilarity_scores, best_neighbors, rotations_shuffled)
 			buddy_matrix = get_best_buddies(compatibility_scores, rotations_shuffled)
-			#do something here??
-
-		find_next_piece()  # find next piece, location to put
-		piece_index = 0
-		row, col = 0, 0
-		# place piece found
-		reconstruction_matrix[row][col] = [piece_index, 0]
-		construction_matrix[row][col] = YES_PIECE
-		adjust_matrices(row, col, reconstruction_matrix, construction_matrix)
-		pieces_placed.add(piece_index)
-		pieces_remaining -= 1
-
-		potential_pool.append(buddy_matrix[piece_index])
+			# do something here??
 
 	# todo trim matrices at end?
 	return reconstruction_matrix
 
 
-def find_next_piece():  # todo
-	return None
+def adjust_matrices(row, col, reconstruction_matrix, construction_matrix, pool):
 
-
-def adjust_matrices(row, col, reconstruction_matrix, construction_matrix):
+	construction_matrix[row][col] = YES_PIECE
 	# resize reconstruction and construction matrices
 	if row == 0 or row == construction_matrix.shape[0] - 1:
 		new_scores_row = np.zeros((1, reconstruction_matrix.shape[1], 2), dtype=int)
 		new_construction_row = np.empty((1, construction_matrix.shape[1]), dtype=int)
 		new_construction_row[:, :] = NO_PIECE
 		if row == 0:  # we placed one on the top row
+			for piece in pool:
+				piece.row += 1
 			reconstruction_matrix = np.concatenate((new_scores_row, reconstruction_matrix), axis=0)
 			construction_matrix = np.concatenate((new_construction_row, construction_matrix), axis=0)
 			row += 1
@@ -453,6 +460,8 @@ def adjust_matrices(row, col, reconstruction_matrix, construction_matrix):
 		new_construction_col = np.empty((construction_matrix.shape[0], 1), dtype=int)
 		new_construction_col[:, :] = NO_PIECE
 		if col == 0:  # we placed one on the left column
+			for piece in pool:
+				piece.col += 1
 			reconstruction_matrix = np.concatenate((new_scores_col, reconstruction_matrix), axis=1)
 			construction_matrix = np.concatenate((new_construction_col, construction_matrix), axis=1)
 			col += 1
