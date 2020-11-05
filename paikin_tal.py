@@ -396,7 +396,7 @@ class PoolCandidate:
 		return self.score > other.score  # reversed for a MAX heap
 
 
-def solve_puzzle(patches: List[np.ndarray], first_piece: int, dissimilarity_scores: np.ndarray, compatibility_scores: np.ndarray, buddy_matrix: np.ndarray, rotations_shuffled: bool) -> np.ndarray:
+def solve_puzzle(patches: List[np.ndarray], first_piece: int, dissimilarity_scores: np.ndarray, compatibility_scores: np.ndarray, buddy_matrix: np.ndarray, rotations_shuffled: bool, best_neighbors) -> np.ndarray:
 	# need to add first piece to the puzzle
 	# need to correctly make the new puzzle (the one we're going to add pieces to one piece at a time) with the right dimensions etc.
 	# need to make a potential pool which adds all the best buddies of the last piece placed
@@ -410,37 +410,84 @@ def solve_puzzle(patches: List[np.ndarray], first_piece: int, dissimilarity_scor
 	pieces_placed = set()
 
 	best_first_piece = buddy_matrix[first_piece]
-	# todo addBuddies3 of first piece
+	num_pieces = buddy_matrix.shape[0]
 	pieces_remaining = buddy_matrix.shape[0]
 	construction_matrix = np.array([[NO_PIECE, EXPANSION_SPACE, NO_PIECE],
 									[EXPANSION_SPACE, YES_PIECE, EXPANSION_SPACE],
 									[NO_PIECE, EXPANSION_SPACE, NO_PIECE]])
 	reconstruction_matrix = np.zeros((3, 3, 2), dtype=int)
 	reconstruction_matrix[1, 1] = [first_piece, 0]  # Add the first piece, 0 refers to the rotation
+	pieces_placed.add(first_piece)
+	add_buddies(first_piece, True, True)
 	pieces_remaining -= 1
+	force_best_buddies = True
+	iterations_until_force_buddies = 0  # itF
+	prev_parts_left = pieces_remaining
 
 	while pieces_remaining > 0:
-		if len(potential_pool) > 0:
-			# todo get next piece out of pool, find if canAddPiece
+		if len(potential_pool) > 0 or True: ########################################
+			# todo get next piece out of pool
 			piece_index = 0
-			row, col = 0, 0
-			# place piece found
-			reconstruction_matrix[row, col] = [piece_index, 0]
-			adjust_matrices(row, col, reconstruction_matrix, construction_matrix, potential_pool)
-			pieces_placed.add(piece_index)
-			pieces_remaining -= 1
+			row, col = 0, 1
 
-		# todo put buddies into the pool buddies3
+			can_add_piece = False # change values 0,1,2,3 ?
+			if row > 0 and construction_matrix[row - 1][col] == EXPANSION_SPACE and \
+					best_neighbors[reconstruction_matrix[row - 1][col]][1] == piece_index and \
+					best_neighbors[piece_index][0] == reconstruction_matrix[row - 1][col]:
+				can_add_piece = True
+			elif row < construction_matrix.shape[0] - 1 and construction_matrix[row + 1][col] == EXPANSION_SPACE and \
+					best_neighbors[reconstruction_matrix[row + 1][col]][0] == piece_index and \
+					best_neighbors[piece_index][1] == reconstruction_matrix[row + 1][col]:
+				can_add_piece = True
+			elif col > 0 and construction_matrix[row][col - 1] == EXPANSION_SPACE and \
+					best_neighbors[reconstruction_matrix[row][col - 1]][3] == piece_index and \
+					best_neighbors[piece_index][2] == reconstruction_matrix[row][col - 1]:
+				can_add_piece = True
+			elif col < construction_matrix.shape[1] - 1 and construction_matrix[row][col + 1] == EXPANSION_SPACE and \
+					best_neighbors[reconstruction_matrix[row][col + 1]][2] == piece_index and \
+					best_neighbors[piece_index][3] == reconstruction_matrix[row][col + 1]:
+				can_add_piece = True
+			elif force_best_buddies is False:
+				can_add_piece = True
+
+			if pieces_placed.__contains__(piece_index):
+				can_add_piece = False
+
+			if construction_matrix[row][col] is not EXPANSION_SPACE or can_add_piece is False:
+				potential_pool.remove(piece_index)  # fix this
+			else:
+				# place piece found
+				reconstruction_matrix[row, col] = [piece_index, 0]
+				adjust_matrices(row, col, reconstruction_matrix, construction_matrix, potential_pool)
+				pieces_placed.add(piece_index)
+				pieces_remaining -= 1
+				potential_pool.remove(piece_index)  # fix this
+				add_buddies(piece_index, True, True)
+				if force_best_buddies is False and pieces_remaining < num_pieces / 2:
+					add_buddies(piece_index, False, False)
+				iterations_until_force_buddies -= 1
+				if force_best_buddies is False and (iterations_until_force_buddies < 1 or pieces_remaining < num_pieces / 2):
+					force_best_buddies = True
 		else:  # pool is empty
 			# recalculate the compatibility function
-			# find the best neighbors (not best buddies)
-			best_neighbors = get_best_neighbors(dissimilarity_scores, rotations_shuffled)
-			compatibility_scores = get_compatibility_scores(dissimilarity_scores, best_neighbors, rotations_shuffled)
-			buddy_matrix = get_best_buddies(compatibility_scores, rotations_shuffled)
-		# do something here??
+			# find the best neighbors -> eliminateComp
+			if prev_parts_left - (prev_parts_left / 5) - 1 < pieces_remaining:
+				#addCandidates(false)
+				# iterations_until_force_buddies = max() ?? denum?
+				if pieces_remaining < num_pieces / 2:
+					iterations_until_force_buddies = pieces_remaining / 2
+			# else:
+				#addCandidates(true)
+			force_best_buddies = False
+			prev_parts_left = pieces_remaining
+			#  need itNum??
 
 	# todo trim matrices at end?
 	return reconstruction_matrix
+
+
+def add_buddies(placedPiece: int, checkMutuality: bool, checkCycles: bool):
+	return None
 
 
 def adjust_matrices(row: int, col: int, reconstruction_matrix: np.ndarray, construction_matrix: np.ndarray, pool: List[PoolCandidate]) -> np.ndarray:
@@ -503,4 +550,4 @@ def jigsaw_pt(patches: List[np.ndarray], rotations_shuffled: bool = True) -> np.
 	first_piece = pick_first_piece(buddy_matrix, compatibility_scores, best_neighbors, rotations_shuffled)
 	print(f"first piece selected: {first_piece}")
 	print("running main placement loop...")
-	return solve_puzzle(patches, first_piece, dissimilarity_scores, compatibility_scores, buddy_matrix, rotations_shuffled)
+	return solve_puzzle(patches, first_piece, dissimilarity_scores, compatibility_scores, buddy_matrix, rotations_shuffled, best_neighbors)
