@@ -425,7 +425,7 @@ def solve_puzzle(patches: List[np.ndarray], first_piece: int, dissimilarity_scor
 	prev_parts_left = pieces_remaining
 
 	while pieces_remaining > 0:
-		if len(potential_pool) > 0 or True: ########################################
+		if len(potential_pool) > 0:
 			# todo get next piece out of pool
 			piece_index = 0
 			row, col = 0, 1
