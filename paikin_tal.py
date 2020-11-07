@@ -420,9 +420,6 @@ def solve_puzzle(patches: List[np.ndarray], first_piece: int, dissimilarity_scor
 	pieces_placed.add(first_piece)
 	add_buddies(first_piece, True, True)
 	pieces_remaining -= 1
-	force_best_buddies = True
-	iterations_until_force_buddies = 0  # itF
-	prev_parts_left = pieces_remaining
 
 	while pieces_remaining > 0:
 		if len(potential_pool) > 0:
@@ -430,14 +427,14 @@ def solve_puzzle(patches: List[np.ndarray], first_piece: int, dissimilarity_scor
 			piece_index = 0
 			row, col = 0, 1
 
-			can_add_piece = False # change values 0,1,2,3 ?
+			can_add_piece = False  # right 0, up 1, left 2, down 3
 			if row > 0 and construction_matrix[row - 1][col] == EXPANSION_SPACE and \
 					best_neighbors[reconstruction_matrix[row - 1][col]][1] == piece_index and \
-					best_neighbors[piece_index][0] == reconstruction_matrix[row - 1][col]:
+					best_neighbors[piece_index][1] == reconstruction_matrix[row - 1][col]:
 				can_add_piece = True
 			elif row < construction_matrix.shape[0] - 1 and construction_matrix[row + 1][col] == EXPANSION_SPACE and \
 					best_neighbors[reconstruction_matrix[row + 1][col]][0] == piece_index and \
-					best_neighbors[piece_index][1] == reconstruction_matrix[row + 1][col]:
+					best_neighbors[piece_index][3] == reconstruction_matrix[row + 1][col]:
 				can_add_piece = True
 			elif col > 0 and construction_matrix[row][col - 1] == EXPANSION_SPACE and \
 					best_neighbors[reconstruction_matrix[row][col - 1]][3] == piece_index and \
@@ -445,9 +442,7 @@ def solve_puzzle(patches: List[np.ndarray], first_piece: int, dissimilarity_scor
 				can_add_piece = True
 			elif col < construction_matrix.shape[1] - 1 and construction_matrix[row][col + 1] == EXPANSION_SPACE and \
 					best_neighbors[reconstruction_matrix[row][col + 1]][2] == piece_index and \
-					best_neighbors[piece_index][3] == reconstruction_matrix[row][col + 1]:
-				can_add_piece = True
-			elif force_best_buddies is False:
+					best_neighbors[piece_index][0] == reconstruction_matrix[row][col + 1]:
 				can_add_piece = True
 
 			if pieces_placed.__contains__(piece_index):
@@ -463,24 +458,13 @@ def solve_puzzle(patches: List[np.ndarray], first_piece: int, dissimilarity_scor
 				pieces_remaining -= 1
 				potential_pool.remove(piece_index)  # fix this
 				add_buddies(piece_index, True, True)
-				if force_best_buddies is False and pieces_remaining < num_pieces / 2:
-					add_buddies(piece_index, False, False)
-				iterations_until_force_buddies -= 1
-				if force_best_buddies is False and (iterations_until_force_buddies < 1 or pieces_remaining < num_pieces / 2):
-					force_best_buddies = True
-		else:  # pool is empty
-			# recalculate the compatibility function
-			# find the best neighbors -> eliminateComp
-			if prev_parts_left - (prev_parts_left / 5) - 1 < pieces_remaining:
-				#addCandidates(false)
-				# iterations_until_force_buddies = max() ?? denum?
 				if pieces_remaining < num_pieces / 2:
-					iterations_until_force_buddies = pieces_remaining / 2
-			# else:
-				#addCandidates(true)
-			force_best_buddies = False
-			prev_parts_left = pieces_remaining
-			#  need itNum??
+					add_buddies(piece_index, False, False)
+
+		# else:  # pool is empty
+			#eliminateComp()
+			#get_best_neighbors()
+			#addCandidates()
 
 	# todo trim matrices at end?
 	return reconstruction_matrix
