@@ -425,6 +425,7 @@ def solve_puzzle(patches: List[np.ndarray], first_piece: int, dissimilarity_scor
 	best_first_piece = buddy_matrix[first_piece]
 	# todo addBuddies of first piece
 	pieces_remaining = buddy_matrix.shape[0]
+	num_pieces = pieces_remaining
 	construction_matrix = np.array([[NO_PIECE, EXPANSION_SPACE, NO_PIECE],
 									[EXPANSION_SPACE, YES_PIECE, EXPANSION_SPACE],
 									[NO_PIECE, EXPANSION_SPACE, NO_PIECE]])
@@ -436,24 +437,61 @@ def solve_puzzle(patches: List[np.ndarray], first_piece: int, dissimilarity_scor
 		if len(preference_pool) > 0:
 			# todo: get next piece out of pool, find if canAddPiece
 			piece_index = 0
-			row, col = 0, 0
-			# place piece found
-			reconstruction_matrix[row, col] = [piece_index, 0]
-			adjust_matrices(row, col, reconstruction_matrix, construction_matrix, preference_pool)
-			pieces_placed.add(piece_index)
-			pieces_remaining -= 1
+			row, col = 0, 1
 
-		# todo: put buddies into the pool buddies3
-		else:  # pool is empty
-			# recalculate the compatibility function
-			# find the best neighbors (not best buddies)
-			best_neighbors = get_best_neighbors(dissimilarity_scores, rotations_shuffled)
-			compatibility_scores = get_compatibility_scores(dissimilarity_scores, best_neighbors, rotations_shuffled)
-			buddy_matrix = get_best_buddies(compatibility_scores, rotations_shuffled)
-	# do something here??
+			can_add_piece = False  # right 0, up 1, left 2, down 3
+			if row > 0 and construction_matrix[row - 1][col] == EXPANSION_SPACE and \
+					best_neighbors[reconstruction_matrix[row - 1][col]][1] == piece_index and \
+					best_neighbors[piece_index][1] == reconstruction_matrix[row - 1][col]:
+				can_add_piece = True
+			elif row < construction_matrix.shape[0] - 1 and construction_matrix[row + 1][col] == EXPANSION_SPACE and \
+					best_neighbors[reconstruction_matrix[row + 1][col]][0] == piece_index and \
+					best_neighbors[piece_index][3] == reconstruction_matrix[row + 1][col]:
+				can_add_piece = True
+			elif col > 0 and construction_matrix[row][col - 1] == EXPANSION_SPACE and \
+					best_neighbors[reconstruction_matrix[row][col - 1]][3] == piece_index and \
+					best_neighbors[piece_index][2] == reconstruction_matrix[row][col - 1]:
+				can_add_piece = True
+			elif col < construction_matrix.shape[1] - 1 and construction_matrix[row][col + 1] == EXPANSION_SPACE and \
+					best_neighbors[reconstruction_matrix[row][col + 1]][2] == piece_index and \
+					best_neighbors[piece_index][0] == reconstruction_matrix[row][col + 1]:
+				can_add_piece = True
+
+			if pieces_placed.__contains__(piece_index):
+				can_add_piece = False
+
+			if construction_matrix[row][col] is not EXPANSION_SPACE or can_add_piece is False:
+				preference_pool.remove(piece_index)  # fix this
+			else:
+				# place piece found
+				reconstruction_matrix[row, col] = [piece_index, 0]
+				adjust_matrices(row, col, reconstruction_matrix, construction_matrix, preference_pool)
+				pieces_placed.add(piece_index)
+				pieces_remaining -= 1
+				preference_pool.remove(piece_index)  # fix this
+				add_buddies_to_pool(piece_index, True, True)
+				if pieces_remaining < num_pieces / 2:
+					add_buddies_to_pool(piece_index, False, False)
+				# eliminateComp
+
+		# else:  # pool is empty
+			# get_best_neighbors()
+			#addCandidates
 
 	# todo: trim matrices at end?
 	return reconstruction_matrix
+
+
+def eliminateComp(num_pieces, pieces_placed, dissimilarity_scores): #renammee
+	for i in range(num_pieces):
+		for j in range(num_pieces):
+			if pieces_placed.__contains__(i) and pieces_placed.__contains__(j):  # both have been placed
+				dissimilarity_scores[0][i][j] = INFINITY
+				dissimilarity_scores[1][i][j] = INFINITY
+				dissimilarity_scores[2][i][j] = INFINITY
+				dissimilarity_scores[3][i][j] = INFINITY
+			elif pieces_placed.__contains__(j):  # only j has been placed
+				print("todo")
 
 
 def add_buddies_to_pool(placed_piece: int, check_mutuality: bool, check_cycles: bool, preference_pool: List[PoolCandidate]):
