@@ -19,8 +19,7 @@ def predict_3rd_pixel(col1: np.ndarray, col2: np.ndarray, use_lab_color: bool) -
 	"""
 	diff_col = col2 - col1
 	expected = col2 + diff_col
-	# restrict to [0, 255]
-	if not use_lab_color:
+	if not use_lab_color:  # RGB needs to be clipped; restrict to [0, 255]
 		coords = np.where(expected < 0)
 		for row, channel in zip(*coords):
 			expected[row, channel] = 0
@@ -151,33 +150,33 @@ def get_dissimilarity_scores(patches: List[np.ndarray], predictions_matrix: np.n
 	return score_matrix
 
 
-def get_best_neighbors(dissimilarity_scores: np.ndarray, rotations_shuffled: bool = True) -> np.ndarray:
+def get_best_neighbors(scores_matrix: np.ndarray, rotations_shuffled: bool = True) -> np.ndarray:
 	"""
 	TODO
-	:param dissimilarity_scores:
+	:param scores_matrix:
 	:param rotations_shuffled: indicates if the patches have been rotated randomly (vs all being rotated correctly to start with)
 	:return:
 	"""
-	n = dissimilarity_scores.shape[0]
-	best_neighbors = np.empty((n, 4), dtype=tuple)
+	n = scores_matrix.shape[0]
+	best_neighbors_dissimilarity = np.empty((n, 4), dtype=tuple)
 	for i in range(n):
-		for r1 in range(dissimilarity_scores.shape[1]):
+		for r1 in range(scores_matrix.shape[1]):
 			if rotations_shuffled:
-				relevant_section = dissimilarity_scores[i, r1, :, :]
+				relevant_section = scores_matrix[i, r1, :, :]
 				best_dissimilarity = np.where(relevant_section == np.amin(relevant_section))
-				best_neighbors[i, r1] = list(zip(*best_dissimilarity))[0]  # just take the first if there's a tie
+				best_neighbors_dissimilarity[i, r1] = list(zip(*best_dissimilarity))[0]  # just take the first if there's a tie
 			else:
-				relevant_section = dissimilarity_scores[i, r1, :]
+				relevant_section = scores_matrix[i, r1, :]
 				best_dissimilarity = np.where(relevant_section == np.amin(relevant_section))
-				best_neighbors[i, r1] = best_dissimilarity[0][0]  # just take the first if there's a tie
-	return best_neighbors
+				best_neighbors_dissimilarity[i, r1] = best_dissimilarity[0][0]  # just take the first if there's a tie
+	return best_neighbors_dissimilarity
 
 
-def compatibility_score(dissimilarity_scores: np.ndarray, best_neighbors: np.ndarray, patch_index: int, r: int, rotations_shuffled: bool = True) -> np.ndarray:
+def compatibility_score(dissimilarity_scores: np.ndarray, best_neighbors_dissimilarity: np.ndarray, patch_index: int, r: int, rotations_shuffled: bool = True) -> np.ndarray:
 	"""
 	TODO
 	:param dissimilarity_scores:
-	:param best_neighbors:
+	:param best_neighbors_dissimilarity:
 	:param patch_index:
 	:param r:
 	:param rotations_shuffled: indicates if the patches have been rotated randomly (vs all being rotated correctly to start with)
@@ -186,7 +185,7 @@ def compatibility_score(dissimilarity_scores: np.ndarray, best_neighbors: np.nda
 	if rotations_shuffled:
 		relevant_slice = dissimilarity_scores[patch_index, r, :, :]
 		scores_to_return = np.empty_like(relevant_slice)
-		best_d_j, best_d_r = best_neighbors[patch_index, r]
+		best_d_j, best_d_r = best_neighbors_dissimilarity[patch_index, r]
 		best_d_score = dissimilarity_scores[patch_index, r, best_d_j, best_d_r]
 		next_best_d_score = np.amin(
 			relevant_slice[relevant_slice != best_d_score])  # if there is no second-best, this will raise a ValueError
@@ -197,33 +196,33 @@ def compatibility_score(dissimilarity_scores: np.ndarray, best_neighbors: np.nda
 				else:
 					scores_to_return[patch_index2, r2] = 0.0
 	else:
-		relevant_slice = dissimilarity_scores[patch_index, r, :]
+		relevant_slice = np.copy(dissimilarity_scores[patch_index, r, :])
 		scores_to_return = np.empty_like(relevant_slice)
-		best_d_j = best_neighbors[patch_index, r]
-		best_d_score = dissimilarity_scores[patch_index, r, best_d_j]
-		next_best_d_score = np.amin(
-			relevant_slice[relevant_slice != best_d_score])  # if there is no second-best, this will raise a ValueError
+		best_d_j = best_neighbors_dissimilarity[patch_index, r]
+		# best_d_score = dissimilarity_scores[patch_index, r, best_d_j]
+		relevant_slice[best_d_j] = INFINITY
+		next_best_d_score = np.amin(relevant_slice)  # if there is no second-best, this will raise a ValueError
 		for patch_index2 in range(scores_to_return.shape[0]):
 			if next_best_d_score != 0:
-				scores_to_return[patch_index2] = 1 - (relevant_slice[patch_index2] / next_best_d_score)
+				scores_to_return[patch_index2] = 1.0 - (relevant_slice[patch_index2] / next_best_d_score)
 			else:
-				scores_to_return[patch_index2] = 0.0
+				scores_to_return[patch_index2] = 0.001
 	return scores_to_return
 
 
-def compatibility_score_mp(coord_and_dissimilarities: (tuple, np.ndarray, np.ndarray, bool)) -> (tuple, np.ndarray):
+def compatibility_score_mp(coord_and_dissimilarities: (Tuple[int, int], np.ndarray, np.ndarray, bool)) -> (Tuple[int, int], np.ndarray):
 	# for use with the multiprocessing library
-	(patch_index, r), dissimilarity_scores, best_neighbors, rotations_shuffled = coord_and_dissimilarities
-	compatibility_scores = compatibility_score(dissimilarity_scores, best_neighbors, patch_index, r, rotations_shuffled)
+	(patch_index, r), dissimilarity_scores, best_neighbors_dissimilarity, rotations_shuffled = coord_and_dissimilarities
+	compatibility_scores = compatibility_score(dissimilarity_scores, best_neighbors_dissimilarity, patch_index, r, rotations_shuffled)
 	return (patch_index, r), compatibility_scores
 
 
 # generates input for compatibility_score_mp()
 class CompatibilityScoreMpGenerator:
-	def __init__(self, dissimilarity_scores: np.ndarray, best_neighbors: np.ndarray, rotations_shuffled: bool = True):
+	def __init__(self, dissimilarity_scores: np.ndarray, best_neighbors_dissimilarity: np.ndarray, rotations_shuffled: bool = True):
 		self.n = dissimilarity_scores.shape[0]
 		self.d = dissimilarity_scores
-		self.b = best_neighbors
+		self.b = best_neighbors_dissimilarity
 		self.rotations_shuffled = rotations_shuffled
 
 	def __iter__(self):
@@ -235,11 +234,11 @@ class CompatibilityScoreMpGenerator:
 		return self.n * 4
 
 
-def get_compatibility_scores(dissimilarity_scores: np.ndarray, best_neighbors: np.ndarray, rotations_shuffled: bool = True) -> np.ndarray:
+def get_compatibility_scores(dissimilarity_scores: np.ndarray, best_neighbors_dissimilarity: np.ndarray, rotations_shuffled: bool = True) -> np.ndarray:
 	"""
 	takes a matrix of all dissimilarity scores and gives a matrix of compatibility scores
 	:param dissimilarity_scores: the matrix of all dissimilarity scores as a numpy array of shape (n, 4, n[, 4]), where n is the total number of patches
-	:param best_neighbors: TODO
+	:param best_neighbors_dissimilarity: TODO
 	:param rotations_shuffled: indicates if the patches have been rotated randomly (vs all being rotated correctly to start with)
 	:return: TODO
 	low values mean they are a bad pairing; high values mean they are a good pairing
@@ -248,7 +247,7 @@ def get_compatibility_scores(dissimilarity_scores: np.ndarray, best_neighbors: n
 	if rotations_shuffled:
 		score_matrix = np.empty((n, 4, n, 4), dtype=float)
 		with mp.Pool() as pool:
-			gen = CompatibilityScoreMpGenerator(dissimilarity_scores, best_neighbors, rotations_shuffled)
+			gen = CompatibilityScoreMpGenerator(dissimilarity_scores, best_neighbors_dissimilarity, rotations_shuffled)
 			result_generator = pool.imap_unordered(compatibility_score_mp, gen)
 			with tqdm(total=len(gen)) as progress_bar:
 				for (patch1_index, r1), scores_section in result_generator:
@@ -257,7 +256,7 @@ def get_compatibility_scores(dissimilarity_scores: np.ndarray, best_neighbors: n
 	else:
 		score_matrix = np.empty((n, 4, n), dtype=float)
 		with mp.Pool() as pool:
-			gen = CompatibilityScoreMpGenerator(dissimilarity_scores, best_neighbors, rotations_shuffled)
+			gen = CompatibilityScoreMpGenerator(dissimilarity_scores, best_neighbors_dissimilarity, rotations_shuffled)
 			result_generator = pool.imap_unordered(compatibility_score_mp, gen)
 			with tqdm(total=len(gen)) as progress_bar:
 				for (patch1_index, r1), scores_section in result_generator:
@@ -325,12 +324,12 @@ def get_best_buddies(compatibility_scores: np.ndarray, rotations_shuffled: bool 
 	return buddy_matrix
 
 
-def pick_first_piece(buddy_matrix: np.ndarray, compatibility_scores: np.ndarray, best_neighbors: np.ndarray, rotations_shuffled: bool = True) -> int:
+def pick_first_piece(buddy_matrix: np.ndarray, compatibility_scores: np.ndarray, best_neighbors_dissimilarity: np.ndarray, rotations_shuffled: bool = True) -> int:
 	"""
 	takes info about best buddies and compatibility scores and selects the first piece to be placed
 	:param buddy_matrix: the matrix indicating the best buddy of each piece, if any, as a numpy of shape (n, 4) containing tuples of form (piece_index, rotation_index)
 	:param compatibility_scores: the matrix of all compatibility scores as a numpy array of shape (n, 4, n[, 4)], where n is the total number of patches
-	:param best_neighbors: TODO
+	:param best_neighbors_dissimilarity: TODO
 	:param rotations_shuffled: indicates if the patches have been rotated randomly (vs all being rotated correctly to start with)
 	:return: the index of the patch that is selected as our first piece to place
 	"""
@@ -364,7 +363,7 @@ def pick_first_piece(buddy_matrix: np.ndarray, compatibility_scores: np.ndarray,
 	if highest_buddy_count != 0:  # pick the piece that has the best sum of mutual compatibility scores with its best buddies
 		matrix_to_use = buddy_matrix
 	else:  # pick the piece that has the best sum of mutual compatibility scores with its best-scoring neighbors
-		matrix_to_use = best_neighbors
+		matrix_to_use = best_neighbors_dissimilarity
 	best_score = -INFINITY
 	best_index = -1
 	for i in candidates:
@@ -403,7 +402,7 @@ class PoolCandidate:
 		return self.score > other.score  # reversed for a MAX heap
 
 
-def solve_puzzle(patches: List[np.ndarray], first_piece: int, dissimilarity_scores: np.ndarray, best_neighbors, compatibility_scores: np.ndarray, buddy_matrix: np.ndarray, rotations_shuffled: bool, ) -> np.ndarray:
+def solve_puzzle(patches: List[np.ndarray], first_piece: int, dissimilarity_scores: np.ndarray, best_neighbors_dissimilarity, compatibility_scores: np.ndarray, buddy_matrix: np.ndarray, rotations_shuffled: bool, ) -> np.ndarray:
 	"""
 	runs the main loop of greedy placement
 	:param patches: list of numpy arrays that are the actual patches (puzzle pieces)
@@ -421,8 +420,6 @@ def solve_puzzle(patches: List[np.ndarray], first_piece: int, dissimilarity_scor
 	# construction_matrix needs to then be updated and reconstruction_matrix may need to have size updated
 	# if the pool is empty, we have to re score best buddy matrix and exclude pieces that have already been placed
 	# continue the process until all pieces have been placed
-	print(patches)
-
 	preference_pool = list()  # max heap of PoolCandidates
 	pieces_placed = set()
 
@@ -445,20 +442,20 @@ def solve_puzzle(patches: List[np.ndarray], first_piece: int, dissimilarity_scor
 
 			can_add_piece = False  # right 0, up 1, left 2, down 3
 			if row > 0 and construction_matrix[row - 1][col] == EXPANSION_SPACE and \
-					best_neighbors[reconstruction_matrix[row - 1][col]][1] == piece_index and \
-					best_neighbors[piece_index][1] == reconstruction_matrix[row - 1][col]:
+					best_neighbors_dissimilarity[reconstruction_matrix[row - 1][col]][1] == piece_index and \
+					best_neighbors_dissimilarity[piece_index][1] == reconstruction_matrix[row - 1][col]:
 				can_add_piece = True
 			elif row < construction_matrix.shape[0] - 1 and construction_matrix[row + 1][col] == EXPANSION_SPACE and \
-					best_neighbors[reconstruction_matrix[row + 1][col]][0] == piece_index and \
-					best_neighbors[piece_index][3] == reconstruction_matrix[row + 1][col]:
+					best_neighbors_dissimilarity[reconstruction_matrix[row + 1][col]][0] == piece_index and \
+					best_neighbors_dissimilarity[piece_index][3] == reconstruction_matrix[row + 1][col]:
 				can_add_piece = True
 			elif col > 0 and construction_matrix[row][col - 1] == EXPANSION_SPACE and \
-					best_neighbors[reconstruction_matrix[row][col - 1]][3] == piece_index and \
-					best_neighbors[piece_index][2] == reconstruction_matrix[row][col - 1]:
+					best_neighbors_dissimilarity[reconstruction_matrix[row][col - 1]][3] == piece_index and \
+					best_neighbors_dissimilarity[piece_index][2] == reconstruction_matrix[row][col - 1]:
 				can_add_piece = True
 			elif col < construction_matrix.shape[1] - 1 and construction_matrix[row][col + 1] == EXPANSION_SPACE and \
-					best_neighbors[reconstruction_matrix[row][col + 1]][2] == piece_index and \
-					best_neighbors[piece_index][0] == reconstruction_matrix[row][col + 1]:
+					best_neighbors_dissimilarity[reconstruction_matrix[row][col + 1]][2] == piece_index and \
+					best_neighbors_dissimilarity[piece_index][0] == reconstruction_matrix[row][col + 1]:
 				can_add_piece = True
 
 			if pieces_placed.__contains__(piece_index):
@@ -479,7 +476,7 @@ def solve_puzzle(patches: List[np.ndarray], first_piece: int, dissimilarity_scor
 					add_buddies_to_pool(piece_index, False, False)
 
 		# else:  # pool is empty
-			# get_best_neighbors()
+			# get_best_neighbors_dissimilarity()
 			#addCandidates
 
 	# todo: trim matrices at end?
@@ -676,10 +673,12 @@ def jigsaw_pt(patches: List[np.ndarray], rotations_shuffled: bool = True, use_la
 	predictions_matrix = get_3rd_pixel_predictions(patches, use_lab_color)
 	print("computing dissimilarity scores...")
 	dissimilarity_scores = get_dissimilarity_scores(patches, predictions_matrix, rotations_shuffled)
-	print("computing best neighbors...")
-	best_neighbors = get_best_neighbors(dissimilarity_scores, rotations_shuffled)
+	print("computing best neighbors by dissimilarity...")
+	best_neighbors_dissimilarity = get_best_neighbors(dissimilarity_scores, rotations_shuffled)
 	print("computing initial compatibility scores...")
-	compatibility_scores = get_compatibility_scores(dissimilarity_scores, best_neighbors, rotations_shuffled)
+	compatibility_scores = get_compatibility_scores(dissimilarity_scores, best_neighbors_dissimilarity, rotations_shuffled)
+	print("computing best neighbors by compatibility...")
+	best_neighbors_compatibility = get_best_neighbors(compatibility_scores, rotations_shuffled)
 	print("finding initial best buddies...")
 	buddy_matrix = get_best_buddies(compatibility_scores, rotations_shuffled)
 	total_slots = buddy_matrix.shape[0] * buddy_matrix.shape[1]
@@ -690,8 +689,8 @@ def jigsaw_pt(patches: List[np.ndarray], rotations_shuffled: bool = True, use_la
 				buddy_count += 1
 	print(f"best buddies count: {buddy_count} / {total_slots}")
 	print("selecting first piece...")
-	first_piece = pick_first_piece(buddy_matrix, compatibility_scores, best_neighbors, rotations_shuffled)
+	first_piece = pick_first_piece(buddy_matrix, compatibility_scores, best_neighbors_compatibility, rotations_shuffled)
 	print(f"first piece selected: {first_piece}")
 	# TODO: actually implement the body of the algorithm (added solve_puzzle function for this below)
-	reconstruction_matrix = solve_puzzle(patches, first_piece, dissimilarity_scores, best_neighbors, compatibility_scores, buddy_matrix, rotations_shuffled)
+	reconstruction_matrix = solve_puzzle(patches, first_piece, dissimilarity_scores, best_neighbors_compatibility, compatibility_scores, buddy_matrix, rotations_shuffled)
 	return reconstruction_matrix
