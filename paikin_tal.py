@@ -4,62 +4,65 @@
 import multiprocessing as mp
 from typing import List, Tuple
 import numpy as np
-from constants import INFINITY, NO_PIECE, EXPANSION_SPACE, YES_PIECE, ROTATION_0, ROTATION_180, ROTATION_90, \
-	ROTATION_270
+from constants import INFINITY, NO_PIECE, EXPANSION_SPACE, YES_PIECE, ROTATION_0, ROTATION_180, ROTATION_90, ROTATION_270
 from tqdm import tqdm
 from functions import rgb_to_lab
 
 
-def predict_3rd_pixel(col1: np.ndarray, col2: np.ndarray) -> np.ndarray:
+def predict_3rd_pixel(col1: np.ndarray, col2: np.ndarray, use_lab_color: bool) -> np.ndarray:
 	"""
 	takes two columns (or rows) of pixels and predicts what the next column (or row) of pixels would be
 	:param col1: the first list of pixels as a numpy array of shape (x, 3)
 	:param col2: the second list of pixels as a numpy array of shape (x, 3)
+	:param use_lab_color: indicates if LAB color space is being used (if `False`, then RGB is being used)
 	:return: the predicted third list of pixels as a numpy array of shape (x, 3)
 	"""
 	diff_col = col2 - col1
 	expected = col2 + diff_col
 	# restrict to [0, 255]
-	coords = np.where(expected < 0)
-	for row, channel in zip(*coords):
-		expected[row, channel] = 0
-	coords = np.where(expected > 255)
-	for row, channel in zip(*coords):
-		expected[row, channel] = 255
+	if not use_lab_color:
+		coords = np.where(expected < 0)
+		for row, channel in zip(*coords):
+			expected[row, channel] = 0
+		coords = np.where(expected > 255)
+		for row, channel in zip(*coords):
+			expected[row, channel] = 255
 	return expected
 
 
-def predict_3rd_pixel_mp(coord_last_columns: (Tuple[int, int], np.ndarray, np.ndarray)) -> (Tuple[int, int], np.ndarray):
-	coord, col1, col2 = coord_last_columns
-	return coord, predict_3rd_pixel(col1, col2)
+def predict_3rd_pixel_mp(coord_last_columns: (Tuple[int, int], np.ndarray, np.ndarray, bool)) -> (Tuple[int, int], np.ndarray):
+	coord, col1, col2, use_lab_color = coord_last_columns
+	return coord, predict_3rd_pixel(col1, col2, use_lab_color)
 
 
 # generates input for predict_3rd_pixel_mp()
 class Predict3rdPixelMpGenerator:
-	def __init__(self, patches: list):
+	def __init__(self, patches: List[np.ndarray], use_lab_color: bool):
 		self.patches = patches
+		self.use_lab_color = use_lab_color
 
 	def __iter__(self):
 		for patch_index, patch in enumerate(self.patches):
 			for r in range(4):
 				patch_rotated = np.rot90(patch, r)
-				yield (patch_index, r), patch_rotated[:, -2, :], patch_rotated[:, -1, :]
+				yield (patch_index, r), patch_rotated[:, -2, :], patch_rotated[:, -1, :], self.use_lab_color
 
 	def __len__(self):
 		n = len(self.patches)
 		return n * 4
 
 
-def get_3rd_pixel_predictions(patches: List[np.ndarray]) -> np.ndarray:
+def get_3rd_pixel_predictions(patches: List[np.ndarray], use_lab_color: bool) -> np.ndarray:
 	"""
 	TODO
 	:param patches:
+	:param use_lab_color:
 	:return:
 	"""
 	n = len(patches)
 	prediction_matrix = np.empty((n, 4), dtype=np.ndarray)
 	with mp.Pool() as pool:
-		gen = Predict3rdPixelMpGenerator(patches)
+		gen = Predict3rdPixelMpGenerator(patches, use_lab_color)
 		result_generator = pool.imap_unordered(predict_3rd_pixel_mp, gen)
 		with tqdm(total=len(gen)) as progress_bar:
 			for (patch_index, r), predicted_column in result_generator:
@@ -659,18 +662,20 @@ def adjust_matrices(row, col, reconstruction_matrix, construction_matrix, pool):
 			construction_matrix[row, col + col_shift] = EXPANSION_SPACE
 
 
-def jigsaw_pt(patches: List[np.ndarray], rotations_shuffled: bool = True):
+def jigsaw_pt(patches: List[np.ndarray], rotations_shuffled: bool = True, use_lab_color: bool = True):
 	"""
 	takes a list of square patches and uses Paikin and Tal's algorithm to assemble the patches
 	:param patches: a list of numpy arrays representing the scrambled patches of the original image (RGB)
 	:param rotations_shuffled: indicates if the patches have been rotated randomly (vs all being rotated correctly to start with)
+	:param use_lab_color: if `True`, converts from RGB to LAB color space; otherwise, uses just RGB
 	:return: the re-assembled image as a numpy array of shape (r, c, 3)
 	"""
-	patches_lab = [rgb_to_lab(p) for p in patches]
+	if use_lab_color:
+		patches = [rgb_to_lab(p) for p in patches]
 	print("computing 3rd pixel predictions...")
-	predictions_matrix = get_3rd_pixel_predictions(patches_lab)
+	predictions_matrix = get_3rd_pixel_predictions(patches, use_lab_color)
 	print("computing dissimilarity scores...")
-	dissimilarity_scores = get_dissimilarity_scores(patches_lab, predictions_matrix, rotations_shuffled)
+	dissimilarity_scores = get_dissimilarity_scores(patches, predictions_matrix, rotations_shuffled)
 	print("computing best neighbors...")
 	best_neighbors = get_best_neighbors(dissimilarity_scores, rotations_shuffled)
 	print("computing initial compatibility scores...")
@@ -688,5 +693,5 @@ def jigsaw_pt(patches: List[np.ndarray], rotations_shuffled: bool = True):
 	first_piece = pick_first_piece(buddy_matrix, compatibility_scores, best_neighbors, rotations_shuffled)
 	print(f"first piece selected: {first_piece}")
 	# TODO: actually implement the body of the algorithm (added solve_puzzle function for this below)
-	reconstruction_matrix = solve_puzzle(patches_lab, first_piece, dissimilarity_scores, best_neighbors, compatibility_scores, buddy_matrix, rotations_shuffled)
+	reconstruction_matrix = solve_puzzle(patches, first_piece, dissimilarity_scores, best_neighbors, compatibility_scores, buddy_matrix, rotations_shuffled)
 	return reconstruction_matrix
