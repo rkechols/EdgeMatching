@@ -630,6 +630,13 @@ def jigsaw_pt(patches: List[np.ndarray], rotations_shuffled: bool = True):
 	compatibility_scores = get_compatibility_scores(dissimilarity_scores, best_neighbors, rotations_shuffled)
 	print("finding initial best buddies...")
 	buddy_matrix = get_best_buddies(compatibility_scores, rotations_shuffled)
+	total_slots = buddy_matrix.shape[0] * buddy_matrix.shape[1]
+	buddy_count = 0
+	for i in range(buddy_matrix.shape[0]):
+		for j in range(buddy_matrix.shape[1]):
+			if buddy_matrix[i, j] is not None:
+				buddy_count += 1
+	print(f"best buddies count: {buddy_count} / {total_slots}")
 	print("selecting first piece...")
 	first_piece = pick_first_piece(buddy_matrix, compatibility_scores, best_neighbors, rotations_shuffled)
 	print(f"first piece selected: {first_piece}")
