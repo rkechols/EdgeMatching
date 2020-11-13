@@ -281,3 +281,11 @@ def assemble_image(patches: list, construction_matrix: np.ndarray) -> Union[None
 			# put it in its place
 			assembled[(i * patch_size):(patch_size * (i + 1)), (j * patch_size):(patch_size * (j + 1)), :] = rotated_patch
 	return assembled
+
+
+def rgb_to_lab(rgb_image: np.ndarray) -> np.ndarray:
+	return cv2.cvtColor(rgb_image, cv2.COLOR_RGB2LAB)
+
+
+def lab_to_rgb(lab_image: np.ndarray) -> np.ndarray:
+	return cv2.cvtColor(lab_image, cv2.COLOR_LAB2RGB)
