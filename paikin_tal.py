@@ -399,7 +399,7 @@ class PoolCandidate:
 		return self.score > other.score  # reversed for a MAX heap
 
 
-def solve_puzzle(patches: List[np.ndarray], first_piece: int, dissimilarity_scores: np.ndarray, compatibility_scores: np.ndarray, buddy_matrix: np.ndarray, rotations_shuffled: bool) -> np.ndarray:
+def solve_puzzle(patches: List[np.ndarray], first_piece: int, dissimilarity_scores: np.ndarray, best_neighbors, compatibility_scores: np.ndarray, buddy_matrix: np.ndarray, rotations_shuffled: bool, ) -> np.ndarray:
 	"""
 	runs the main loop of greedy placement
 	:param patches: list of numpy arrays that are the actual patches (puzzle pieces)
@@ -672,5 +672,5 @@ def jigsaw_pt(patches: List[np.ndarray], rotations_shuffled: bool = True):
 	first_piece = pick_first_piece(buddy_matrix, compatibility_scores, best_neighbors, rotations_shuffled)
 	print(f"first piece selected: {first_piece}")
 	# TODO: actually implement the body of the algorithm (added solve_puzzle function for this below)
-	reconstruction_matrix = solve_puzzle(patches_lab, first_piece, dissimilarity_scores, compatibility_scores, buddy_matrix, rotations_shuffled)
+	reconstruction_matrix = solve_puzzle(patches_lab, first_piece, dissimilarity_scores, best_neighbors, compatibility_scores, buddy_matrix, rotations_shuffled)
 	return reconstruction_matrix
