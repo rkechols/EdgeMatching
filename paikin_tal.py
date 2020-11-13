@@ -4,7 +4,8 @@
 import multiprocessing as mp
 from typing import List, Tuple
 import numpy as np
-from constants import INFINITY, NO_PIECE, EXPANSION_SPACE, YES_PIECE
+from constants import INFINITY, NO_PIECE, EXPANSION_SPACE, YES_PIECE, ROTATION_0, ROTATION_180, ROTATION_90, \
+	ROTATION_270
 from tqdm import tqdm
 from functions import rgb_to_lab
 
@@ -435,7 +436,7 @@ def solve_puzzle(patches: List[np.ndarray], first_piece: int, dissimilarity_scor
 
 	while pieces_remaining > 0:
 		if len(preference_pool) > 0:
-			# todo: get next piece out of pool, find if canAddPiece
+			# todo: get next piece out of pool
 			piece_index = 0
 			row, col = 0, 1
 
@@ -461,18 +462,18 @@ def solve_puzzle(patches: List[np.ndarray], first_piece: int, dissimilarity_scor
 				can_add_piece = False
 
 			if construction_matrix[row][col] is not EXPANSION_SPACE or can_add_piece is False:
-				preference_pool.remove(piece_index)  # fix this
+				preference_pool.remove(piece_index)  # fix this (remove PoolCandidate)
 			else:
 				# place piece found
 				reconstruction_matrix[row, col] = [piece_index, 0]
 				adjust_matrices(row, col, reconstruction_matrix, construction_matrix, preference_pool)
+				block_dissimilarity_scores(pieces_placed, dissimilarity_scores, row, col, piece_index, construction_matrix)
 				pieces_placed.add(piece_index)
 				pieces_remaining -= 1
-				preference_pool.remove(piece_index)  # fix this
+				preference_pool.remove(piece_index)  # fix this (remove PoolCandidate)
 				add_buddies_to_pool(piece_index, True, True)
 				if pieces_remaining < num_pieces / 2:
 					add_buddies_to_pool(piece_index, False, False)
-				# eliminateComp
 
 		# else:  # pool is empty
 			# get_best_neighbors()
@@ -480,18 +481,6 @@ def solve_puzzle(patches: List[np.ndarray], first_piece: int, dissimilarity_scor
 
 	# todo: trim matrices at end?
 	return reconstruction_matrix
-
-
-def eliminateComp(num_pieces, pieces_placed, dissimilarity_scores): #renammee
-	for i in range(num_pieces):
-		for j in range(num_pieces):
-			if pieces_placed.__contains__(i) and pieces_placed.__contains__(j):  # both have been placed
-				dissimilarity_scores[0][i][j] = INFINITY
-				dissimilarity_scores[1][i][j] = INFINITY
-				dissimilarity_scores[2][i][j] = INFINITY
-				dissimilarity_scores[3][i][j] = INFINITY
-			elif pieces_placed.__contains__(j):  # only j has been placed
-				print("todo")
 
 
 def add_buddies_to_pool(placed_piece: int, check_mutuality: bool, check_cycles: bool, preference_pool: List[PoolCandidate]):
@@ -610,6 +599,26 @@ def add_buddies_to_pool(placed_piece: int, check_mutuality: bool, check_cycles: 
 		placementScoreToPiece.put(placementScore, nextA)
 
 	pass
+
+
+def block_dissimilarity_scores(pieces_placed, dissimilarity_scores, row_just_placed, col_just_placed, last_placed, construction_matrix):
+
+	if construction_matrix[row_just_placed][col_just_placed + 1] == YES_PIECE:
+		dissimilarity_scores[last_placed][ROTATION_0][:] = INFINITY
+		dissimilarity_scores[:][ROTATION_180][last_placed] = INFINITY
+	if construction_matrix[row_just_placed][col_just_placed - 1] == YES_PIECE:
+		dissimilarity_scores[last_placed][ROTATION_180][:] = INFINITY
+		dissimilarity_scores[:][ROTATION_0][last_placed] = INFINITY
+	if construction_matrix[row_just_placed + 1][col_just_placed] == YES_PIECE:
+		dissimilarity_scores[last_placed][ROTATION_90][:] = INFINITY
+		dissimilarity_scores[:][ROTATION_270][last_placed] = INFINITY
+	if construction_matrix[row_just_placed - 1][col_just_placed] == YES_PIECE:
+		dissimilarity_scores[last_placed][ROTATION_270][:] = INFINITY
+		dissimilarity_scores[:][ROTATION_90][last_placed] = INFINITY
+
+	for i in pieces_placed:
+		dissimilarity_scores[i][:][last_placed] = INFINITY
+		dissimilarity_scores[last_placed][:][i] = INFINITY
 
 
 def adjust_matrices(row, col, reconstruction_matrix, construction_matrix, pool):
