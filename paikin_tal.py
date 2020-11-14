@@ -1,8 +1,7 @@
 # based on the paper by Genady Paikin and Ayellet Tal, found at http://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=7299116
-
-
+import heapq
 import multiprocessing as mp
-from typing import List, Tuple
+from typing import List, Set, Tuple
 import numpy as np
 from constants import INFINITY, NO_PIECE, EXPANSION_SPACE, YES_PIECE, ROTATION_0, ROTATION_180, ROTATION_90, ROTATION_270
 from tqdm import tqdm
@@ -158,18 +157,22 @@ def get_best_neighbors(scores_matrix: np.ndarray, rotations_shuffled: bool = Tru
 	:return:
 	"""
 	n = scores_matrix.shape[0]
-	best_neighbors_dissimilarity = np.empty((n, 4), dtype=tuple)
+	if rotations_shuffled:
+		d_type = tuple
+	else:
+		d_type = int
+	best_neighbors = np.empty((n, 4), dtype=d_type)
 	for i in range(n):
 		for r1 in range(scores_matrix.shape[1]):
 			if rotations_shuffled:
 				relevant_section = scores_matrix[i, r1, :, :]
 				best_dissimilarity = np.where(relevant_section == np.amin(relevant_section))
-				best_neighbors_dissimilarity[i, r1] = list(zip(*best_dissimilarity))[0]  # just take the first if there's a tie
+				best_neighbors[i, r1] = list(zip(*best_dissimilarity))[0]  # just take the first if there's a tie
 			else:
 				relevant_section = scores_matrix[i, r1, :]
 				best_dissimilarity = np.where(relevant_section == np.amin(relevant_section))
-				best_neighbors_dissimilarity[i, r1] = best_dissimilarity[0][0]  # just take the first if there's a tie
-	return best_neighbors_dissimilarity
+				best_neighbors[i, r1] = best_dissimilarity[0][0]  # just take the first if there's a tie
+	return best_neighbors
 
 
 def compatibility_score(dissimilarity_scores: np.ndarray, best_neighbors_dissimilarity: np.ndarray, patch_index: int, r: int, rotations_shuffled: bool = True) -> np.ndarray:
@@ -192,9 +195,9 @@ def compatibility_score(dissimilarity_scores: np.ndarray, best_neighbors_dissimi
 		for patch_index2 in range(scores_to_return.shape[0]):
 			for r2 in range(scores_to_return.shape[1]):
 				if next_best_d_score != 0:
-					scores_to_return[patch_index2, r2] = 1 - (relevant_slice[patch_index2, r2] / next_best_d_score)
+					scores_to_return[patch_index2, r2] = 1.0 - (relevant_slice[patch_index2, r2] / next_best_d_score)
 				else:
-					scores_to_return[patch_index2, r2] = 0.0
+					scores_to_return[patch_index2, r2] = 0.001
 	else:
 		relevant_slice = np.copy(dissimilarity_scores[patch_index, r, :])
 		scores_to_return = np.empty_like(relevant_slice)
@@ -245,24 +248,24 @@ def get_compatibility_scores(dissimilarity_scores: np.ndarray, best_neighbors_di
 	"""
 	n = dissimilarity_scores.shape[0]
 	if rotations_shuffled:
-		score_matrix = np.empty((n, 4, n, 4), dtype=float)
+		compatibility_scores = np.empty((n, 4, n, 4), dtype=float)
 		with mp.Pool() as pool:
 			gen = CompatibilityScoreMpGenerator(dissimilarity_scores, best_neighbors_dissimilarity, rotations_shuffled)
 			result_generator = pool.imap_unordered(compatibility_score_mp, gen)
 			with tqdm(total=len(gen)) as progress_bar:
 				for (patch1_index, r1), scores_section in result_generator:
-					score_matrix[patch1_index, r1, :, :] = scores_section
+					compatibility_scores[patch1_index, r1, :, :] = scores_section
 					progress_bar.update()
 	else:
-		score_matrix = np.empty((n, 4, n), dtype=float)
+		compatibility_scores = np.empty((n, 4, n), dtype=float)
 		with mp.Pool() as pool:
 			gen = CompatibilityScoreMpGenerator(dissimilarity_scores, best_neighbors_dissimilarity, rotations_shuffled)
 			result_generator = pool.imap_unordered(compatibility_score_mp, gen)
 			with tqdm(total=len(gen)) as progress_bar:
 				for (patch1_index, r1), scores_section in result_generator:
-					score_matrix[patch1_index, r1, :] = scores_section
+					compatibility_scores[patch1_index, r1, :] = scores_section
 					progress_bar.update()
-	return score_matrix
+	return compatibility_scores
 
 
 def get_best_buddies(compatibility_scores: np.ndarray, rotations_shuffled: bool = True) -> np.ndarray:
@@ -402,308 +405,232 @@ class PoolCandidate:
 		return self.score > other.score  # reversed for a MAX heap
 
 
-def solve_puzzle(patches: List[np.ndarray], first_piece: int, dissimilarity_scores: np.ndarray, best_neighbors_dissimilarity, compatibility_scores: np.ndarray, buddy_matrix: np.ndarray, rotations_shuffled: bool, ) -> np.ndarray:
+def add_buddies_to_pool(
+		placed_piece: int, placed_row: int, placed_col: int, check_mutuality: bool, check_cycles: bool, preference_pool: List[PoolCandidate],
+		pieces_placed: Set[int], best_neighbors: np.ndarray, reconstruction_matrix: np.ndarray, construction_matrix: np.ndarray, compatibility_scores: np.ndarray):
 	"""
-	runs the main loop of greedy placement
-	:param patches: list of numpy arrays that are the actual patches (puzzle pieces)
-	:param first_piece: index/id of the patch that is to be placed first
-	:param dissimilarity_scores: array of dissimilarity scores between each pair of patches at a given orientation
-	:param compatibility_scores: array of compatibility/confidence scores between each pair of patches at a given orientation
-	:param buddy_matrix: array of which patches are best buddies (mutual best neighbors) at a given orientation
-	:param rotations_shuffled: indicates if patches have been rotated as part of the scramble
-	:return: reconstruction matrix, shape (row, col, 2) where at a given location index 0 gives the patch index/id, and index 1 gives its rotation
+
+	:param placed_row:
+	:param placed_col:
+	:param placed_piece:
+	:param check_mutuality:
+	:param check_cycles:
+	:param preference_pool:
+	:param pieces_placed:
+	:param best_neighbors:
+	:param reconstruction_matrix:
+	:param construction_matrix:
+	:param compatibility_scores:
+	:return:
 	"""
-	# need to add first piece to the puzzle
-	# need to correctly make the new puzzle (the one we're going to add pieces to one piece at a time) with the right dimensions etc.
-	# need to make a potential pool which adds all the best buddies of the last piece placed
-	# then edge with best compatibility score is added to the puzzle
-	# construction_matrix needs to then be updated and reconstruction_matrix may need to have size updated
-	# if the pool is empty, we have to re score best buddy matrix and exclude pieces that have already been placed
-	# continue the process until all pieces have been placed
-	preference_pool = list()  # max heap of PoolCandidates
-	pieces_placed = set()
+	# adds buddies of a piece into the preference_pool
+	for r in range(4):
+		neighbor = best_neighbors[placed_piece, r]
+		if neighbor == -1:
+			continue  # TODO: will best_neighbors ever have empty spots?
 
-	best_first_piece = buddy_matrix[first_piece]
-	# todo addBuddies of first piece
-	pieces_remaining = buddy_matrix.shape[0]
-	num_pieces = pieces_remaining
-	construction_matrix = np.array([[NO_PIECE, EXPANSION_SPACE, NO_PIECE],
-									[EXPANSION_SPACE, YES_PIECE, EXPANSION_SPACE],
-									[NO_PIECE, EXPANSION_SPACE, NO_PIECE]])
-	reconstruction_matrix = np.zeros((3, 3, 2), dtype=int)
-	reconstruction_matrix[1][1] = [first_piece, 0]  # Add the first piece, 0 refers to the rotation
-	pieces_remaining -= 1
+		op = (r + 2) % 4
+		dir_a = np.zeros(3)
 
-	while pieces_remaining > 0:
-		if len(preference_pool) > 0:
-			# todo: get next piece out of pool
-			piece_index = 0
-			row, col = 0, 1
+		# clockwise_of_next = neighbor 90 degrees clockwise
+		# counter_clockwise_of_next = neighbor 90 degrees counterclockwise
 
-			can_add_piece = False  # right 0, up 1, left 2, down 3
-			if row > 0 and construction_matrix[row - 1][col] == EXPANSION_SPACE and \
-					best_neighbors_dissimilarity[reconstruction_matrix[row - 1][col]][1] == piece_index and \
-					best_neighbors_dissimilarity[piece_index][1] == reconstruction_matrix[row - 1][col]:
-				can_add_piece = True
-			elif row < construction_matrix.shape[0] - 1 and construction_matrix[row + 1][col] == EXPANSION_SPACE and \
-					best_neighbors_dissimilarity[reconstruction_matrix[row + 1][col]][0] == piece_index and \
-					best_neighbors_dissimilarity[piece_index][3] == reconstruction_matrix[row + 1][col]:
-				can_add_piece = True
-			elif col > 0 and construction_matrix[row][col - 1] == EXPANSION_SPACE and \
-					best_neighbors_dissimilarity[reconstruction_matrix[row][col - 1]][3] == piece_index and \
-					best_neighbors_dissimilarity[piece_index][2] == reconstruction_matrix[row][col - 1]:
-				can_add_piece = True
-			elif col < construction_matrix.shape[1] - 1 and construction_matrix[row][col + 1] == EXPANSION_SPACE and \
-					best_neighbors_dissimilarity[reconstruction_matrix[row][col + 1]][2] == piece_index and \
-					best_neighbors_dissimilarity[piece_index][0] == reconstruction_matrix[row][col + 1]:
-				can_add_piece = True
+		if (neighbor not in pieces_placed) and (not check_mutuality or placed_piece == best_neighbors[neighbor, op]):
+			if r == ROTATION_0:  # RIGHT
+				neighbor_col = placed_col + 1
+				neighbor_row = placed_row
+				dir_a[0] = 1
+				dir_a[1] = 2
+				dir_a[2] = 0
+				clockwise_of_next = reconstruction_matrix[neighbor_row + 1, neighbor_col]
+				counter_clockwise_of_next = reconstruction_matrix[neighbor_row - 1, neighbor_col]
 
-			if pieces_placed.__contains__(piece_index):
-				can_add_piece = False
+			elif r == ROTATION_90:  # UP
+				neighbor_col = placed_col  # col
+				neighbor_row = placed_row - 1  # row
+				dir_a[0] = 3  # right
+				dir_a[1] = 1  # down
+				dir_a[2] = 2  # left
+				clockwise_of_next = reconstruction_matrix[neighbor_row, neighbor_col + 1]  # right neighbor
+				counter_clockwise_of_next = reconstruction_matrix[neighbor_row, neighbor_col - 1]  # left neighbor
 
-			if construction_matrix[row][col] is not EXPANSION_SPACE or can_add_piece is False:
-				preference_pool.remove(piece_index)  # fix this (remove PoolCandidate)
-			else:
-				# place piece found
-				reconstruction_matrix[row, col] = [piece_index, 0]
-				adjust_matrices(row, col, reconstruction_matrix, construction_matrix, preference_pool)
-				block_dissimilarity_scores(pieces_placed, dissimilarity_scores, row, col, piece_index, construction_matrix)
-				pieces_placed.add(piece_index)
-				pieces_remaining -= 1
-				preference_pool.remove(piece_index)  # fix this (remove PoolCandidate)
-				add_buddies_to_pool(piece_index, True, True)
-				if pieces_remaining < num_pieces / 2:
-					add_buddies_to_pool(piece_index, False, False)
+			elif r == ROTATION_180:  # LEFT
+				neighbor_col = placed_col - 1
+				neighbor_row = placed_row
+				dir_a[0] = 0
+				dir_a[1] = 3
+				dir_a[2] = 1
+				clockwise_of_next = reconstruction_matrix[neighbor_row - 1, neighbor_col]
+				counter_clockwise_of_next = reconstruction_matrix[neighbor_row + 1, neighbor_col]
 
-		# else:  # pool is empty
-			# get_best_neighbors_dissimilarity()
-			#addCandidates
-
-	# todo: trim matrices at end?
-	return reconstruction_matrix
-
-
-def add_buddies_to_pool(placed_piece: int, check_mutuality: bool, check_cycles: bool,
-						preference_pool: List[PoolCandidate], pieces_placed, best_neighbors, reconstruction_matrix,
-						construction_matrix, compatibility_scores):
-	# adds buddies of a piece into the pool
-	orientation = [ROTATION_0, ROTATION_90, ROTATION_180, ROTATION_270]
-
-	for ori in orientation:
-		next = best_neighbors[placed_piece][ori]
-		if (next == -1):
-			continue
-
-		op = 0
-		if ori % 2 == 0:
-			op = ori + 1
-		else:
-			op = ori - 1
-
-		dir = np.zeros(3)
-
-		clockwiseOfNext = None  # neighbor 90 degrees clockwise
-		counterClockwiseOfNext = None  # neighbor 90 degreescounterclockwise
-		nextCol = 0
-		nextRow = 0
-
-		if (!pieces_placed.containsKey(next) and (!checkMutuality or placed_piece == best_neighbors[next][op])):
-			if ori == ROTATION_0:  # RIGHT
-				nextCol = pieces_placed.get(placed_piece)[0] + 1
-				nextRow = pieces_placed.get(placed_piece)[1]
-				dir[0] = 1
-				dir[1] = 2
-				dir[2] = 0
-				clockwiseOfNext = reconstruction_matrix[nextRow + 1][nextCol]
-				counterClockwiseOfNext = reconstruction_matrix[nextRow - 1][nextCol]
-
-			elif ori == ROTATION_90:  # UP
-				nextCol = pieces_placed.get(placed_piece)[0]  # col
-				nextRow = pieces_placed.get(placed_piece)[1] - 1  # row
-				dir[0] = 3  # right
-				dir[1] = 1  # down
-				dir[2] = 2  # left
-				clockwiseOfNext = reconstruction_matrix[nextRow][nextCol + 1]  # right neighbor
-				counterClockwiseOfNext = reconstruction_matrix[nextRow][nextCol - 1]  # left neighbor
-
-			elif ori == ROTATION_180:  # LEFT
-				nextCol = pieces_placed.get(placed_piece)[0] - 1
-				nextRow = pieces_placed.get(placed_piece)[1]
-				dir[0] = 0
-				dir[1] = 3
-				dir[2] = 1
-				clockwiseOfNext = reconstruction_matrix[nextRow - 1][nextCol]
-				counterClockwiseOfNext = reconstruction_matrix[nextRow + 1][nextCol]
-
-			elif ori == ROTATION_270:  # DOWN
-				nextCol = pieces_placed.get(placed_piece)[0]
-				nextRow = pieces_placed.get(placed_piece)[1] + 1
-				dir[0] = 2  # left
-				dir[1] = 0  # up
-				dir[2] = 3  # right
-				clockwiseOfNext = reconstruction_matrix[nextRow][nextCol - 1]
-				counterClockwiseOfNext = reconstruction_matrix[nextRow][nextCol + 1]
+			elif r == ROTATION_270:  # DOWN
+				neighbor_col = placed_col
+				neighbor_row = placed_row + 1
+				dir_a[0] = 2  # left
+				dir_a[1] = 0  # up
+				dir_a[2] = 3  # right
+				clockwise_of_next = reconstruction_matrix[neighbor_row, neighbor_col - 1]
+				counter_clockwise_of_next = reconstruction_matrix[neighbor_row, neighbor_col + 1]
 
 			else:
-				# default will never happen since it's an enum, but you gotta put *something*
+				# default will never happen, but you gotta put *something* for safe coding
 				print("BAD ORDINAL VALUE")
-				nextCol = 0
-				nextRow = 0
-				clockwiseOfNext = None
-				counterClockwiseOfNext = None
+				neighbor_col = 0
+				neighbor_row = 0
+				clockwise_of_next = None
+				counter_clockwise_of_next = None
 
-		"""
-		#do we need this??
-		if ((useSize and (
-				nextCol - minX + 1 > puzzleParts.nw | | maxX - nextCol - originIndex + 1 > puzzleParts.nw | |
-				nextRow - minY + 1 > puzzleParts.nh | | maxY - nextRow - originIndex + 1 > puzzleParts.nh))):
-			continue
-		"""
+			# # do we need this??
+			# if ((useSize and (
+			# 		neighbor_col - minX + 1 > puzzleParts.nw | | maxX - neighbor_col - originIndex + 1 > puzzleParts.nw | |
+			# 		neighbor_row - minY + 1 > puzzleParts.nh | | maxY - neighbor_row - originIndex + 1 > puzzleParts.nh))):
+			# 	continue
 
-		numBestNeighborRelationshipsOfNext = 0  # how many best neighbor relationships there are (out of 8) if we place nextA in this location
+			num_best_neighbor_relationships_of_next = 0  # how many best neighbor relationships there are (out of 8) if we place nextA in this location
 
-		w1 = 0.5
-		w2 = 0.5
+			w1 = 0.5
+			w2 = 0.5
 
-		# todo: Need to use the actual indices for the construction matrix and best buddies
+			# TODO: Need to use the actual indices for the construction matrix and best buddies
 
-		if (construction_matrix[nextRow - 1][nextCol] == YES_PIECE and
-				best_neighbors[construction_matrix[nextRow - 1][nextCol] - 1][
-					1] == next):  # theres a piece above and is best neighbor up
-			numBestNeighborRelationshipsOfNext += 1
+			if construction_matrix[neighbor_row - 1, neighbor_col] == YES_PIECE and best_neighbors[construction_matrix[neighbor_row - 1, neighbor_col] - 1][1] == neighbor:
+				# there's a piece above and is best neighbor up
+				num_best_neighbor_relationships_of_next += 1
 
-		if (construction_matrix[nextRow + 1][nextCol] == YES_PIECE and best_neighbors[next][1] ==
-				construction_matrix[nextRow + 1][nextCol] - 1):
-			numBestNeighborRelationshipsOfNext += 1
+			if construction_matrix[neighbor_row + 1, neighbor_col] == YES_PIECE and best_neighbors[neighbor, 1] == construction_matrix[neighbor_row + 1, neighbor_col] - 1:
+				num_best_neighbor_relationships_of_next += 1
 
-		if (construction_matrix[nextRow][nextCol - 1] == YES_PIECE and
-				best_neighbors[construction_matrix[nextRow][nextCol - 1] - 1][3] == next):
-			numBestNeighborRelationshipsOfNext += 1
+			if construction_matrix[neighbor_row, neighbor_col - 1] == YES_PIECE and best_neighbors[construction_matrix[neighbor_row, neighbor_col - 1] - 1][3] == neighbor:
+				num_best_neighbor_relationships_of_next += 1
 
-		if (construction_matrix[nextRow][nextCol + 1] == YES_PIECE and best_neighbors[next][3] ==
-				construction_matrix[nextRow][nextCol + 1] - 1):
-			numBestNeighborRelationshipsOfNext += 1
+			if construction_matrix[neighbor_row, neighbor_col + 1] == YES_PIECE and best_neighbors[neighbor, 3] == construction_matrix[neighbor_row, neighbor_col + 1] - 1:
+				num_best_neighbor_relationships_of_next += 1
 
-		if (construction_matrix[nextRow + 1][nextCol] == YES_PIECE and
-				best_neighbors[construction_matrix[nextRow + 1][nextCol] - 1][0] == next):
-			numBestNeighborRelationshipsOfNext += 1
+			if construction_matrix[neighbor_row + 1, neighbor_col] == YES_PIECE and best_neighbors[construction_matrix[neighbor_row + 1, neighbor_col] - 1][0] == neighbor:
+				num_best_neighbor_relationships_of_next += 1
 
-		if (construction_matrix[nextRow - 1][nextCol] == YES_PIECE and best_neighbors[next][0] ==
-				construction_matrix[nextRow - 1][
-					nextCol] - 1):  # there is piece above and is best neighbor down
-			numBestNeighborRelationshipsOfNext += 1
+			if construction_matrix[neighbor_row - 1, neighbor_col] == YES_PIECE and best_neighbors[neighbor, 0] == construction_matrix[neighbor_row - 1, neighbor_col] - 1:
+				# there is piece above and is best neighbor down
+				num_best_neighbor_relationships_of_next += 1
 
-		if (construction_matrix[nextRow][nextCol + 1] == YES_PIECE and
-				best_neighbors[construction_matrix[nextRow][nextCol + 1] - 1][2] == next):
-			numBestNeighborRelationshipsOfNext += 1
+			if construction_matrix[neighbor_row, neighbor_col + 1] == YES_PIECE and best_neighbors[construction_matrix[neighbor_row, neighbor_col + 1] - 1][2] == neighbor:
+				num_best_neighbor_relationships_of_next += 1
 
-		if (construction_matrix[nextRow][nextCol - 1] == YES_PIECE and best_neighbors[next][2] ==
-				construction_matrix[nextRow][nextCol - 1] - 1):
-			numBestNeighborRelationshipsOfNext += 1
+			if construction_matrix[neighbor_row, neighbor_col - 1] == YES_PIECE and best_neighbors[neighbor, 2] == construction_matrix[neighbor_row, neighbor_col - 1] - 1:
+				num_best_neighbor_relationships_of_next += 1
 
-		sumMutualCompatibility = 0  # aggregates a compatibility of potential neighbors
-		numPlacedNeighborsOfNext = 0  # counts how many neighbors it would have if placed
-		if (construction_matrix[nextRow - 1][nextCol] == YES_PIECE):  # if there is a piece above nextA
-			sumMutualCompatibility += w1 * compatibility_scores[1][construction_matrix[nextRow - 1][nextCol] - 1][
-				next] + w2 * compatibility_scores[0][next][construction_matrix[nextRow - 1][nextCol] - 1]
-			# w1 * confidence score FROM piece above TO nextA oriented down (1) # w2 * confidence score TO piece above FROM nextA oriented up (0)
-			numPlacedNeighborsOfNext += 1
+			sum_mutual_compatibility = 0  # aggregates a compatibility of potential neighbors
+			num_placed_neighbors_of_next = 0  # counts how many neighbors it would have if placed
+			if construction_matrix[neighbor_row - 1, neighbor_col] == YES_PIECE:  # if there is a piece above nextA
+				sum_mutual_compatibility += w1 * compatibility_scores[1, construction_matrix[neighbor_row - 1, neighbor_col] - 1][neighbor]\
+				                            + w2 * compatibility_scores[0, neighbor, construction_matrix[neighbor_row - 1, neighbor_col] - 1]
+				# w1 * confidence score FROM piece above TO nextA oriented down (1) # w2 * confidence score TO piece above FROM nextA oriented up (0)
+				num_placed_neighbors_of_next += 1
 
-		if (construction_matrix[nextRow + 1][nextCol] == YES_PIECE):
-			sumMutualCompatibility += w1 * compatibility_scores[0][construction_matrix[nextRow + 1][nextCol] - 1][
-				next] + w2 * compatibility_scores[1][next][construction_matrix[nextRow + 1][nextCol] - 1]
-			numPlacedNeighborsOfNext += 1
+			if construction_matrix[neighbor_row + 1, neighbor_col] == YES_PIECE:
+				sum_mutual_compatibility += w1 * compatibility_scores[0, construction_matrix[neighbor_row + 1, neighbor_col] - 1][neighbor]\
+				                            + w2 * compatibility_scores[1, neighbor, construction_matrix[neighbor_row + 1, neighbor_col] - 1]
+				num_placed_neighbors_of_next += 1
 
-		if (construction_matrix[nextRow][nextCol - 1] == YES_PIECE):
-			sumMutualCompatibility += w1 * compatibility_scores[3][construction_matrix[nextRow][nextCol - 1] - 1][
-				next] + w2 * compatibility_scores[2][next][construction_matrix[nextRow][nextCol - 1] - 1]
-			numPlacedNeighborsOfNext += 1
+			if construction_matrix[neighbor_row, neighbor_col - 1] == YES_PIECE:
+				sum_mutual_compatibility += w1 * compatibility_scores[3, construction_matrix[neighbor_row, neighbor_col - 1] - 1][neighbor]\
+				                            + w2 * compatibility_scores[2, neighbor, construction_matrix[neighbor_row, neighbor_col - 1] - 1]
+				num_placed_neighbors_of_next += 1
 
-		if (construction_matrix[nextRow][nextCol + 1] == YES_PIECE):
-			sumMutualCompatibility += w1 * compatibility_scores[2][construction_matrix[nextRow][nextCol + 1] - 1][
-				next] + w2 * compatibility_scores[3][next][construction_matrix[nextRow][nextCol + 1] - 1]
-			numPlacedNeighborsOfNext += 1
+			if construction_matrix[neighbor_row, neighbor_col + 1] == YES_PIECE:
+				sum_mutual_compatibility += w1 * compatibility_scores[2, construction_matrix[neighbor_row, neighbor_col + 1] - 1][neighbor]\
+				                            + w2 * compatibility_scores[3, neighbor, construction_matrix[neighbor_row, neighbor_col + 1] - 1]
+				num_placed_neighbors_of_next += 1
 
-		cycle_bonus = 0.0
+			cycle_bonus = 0.0
 
-		if (numPlacedNeighborsOfNext == 1 and
-				(best_neighbors[next][dir[0]] != -1
-				 and best_neighbors[best_neighbors[next][dir[0]]][dir[1]] != -1
-				 and best_neighbors[best_neighbors[best_neighbors[next][dir[0]]][dir[1]]][dir[2]] == placed_piece)):
-			cycle_bonus += 0.25
+			if (num_placed_neighbors_of_next == 1 and
+					(best_neighbors[neighbor, dir_a[0]] != -1
+					 and best_neighbors[best_neighbors[neighbor, dir_a[0]], dir_a[1]] != -1
+					 and best_neighbors[best_neighbors[best_neighbors[neighbor, dir_a[0]], dir_a[1]], dir_a[2]] == placed_piece)):
+				cycle_bonus += 0.25
 
-		if (clockwiseOfNext != None and numPlacedNeighborsOfNext == 1 and  # if next has ONE placed clockwise neighbor
-				(best_neighbors[next][dir[0]] != -1 and  # and has a best neighbor in that direction
-				 best_neighbors[best_neighbors[next][dir[0]]][dir[1]] == clockwiseOfNext)):  # ????
-			cycle_bonus += 0.25
-			print("???")
+			if (clockwise_of_next is not None and num_placed_neighbors_of_next == 1 and  # if next has ONE placed clockwise neighbor
+					(best_neighbors[neighbor, dir_a[0]] != -1 and  # and has a best neighbor in that direction
+					 best_neighbors[best_neighbors[neighbor, dir_a[0]], dir_a[1]] == clockwise_of_next)):  # ????
+				cycle_bonus += 0.25
+				print("???")
 
-		if (numPlacedNeighborsOfNext == 1 and
-				(best_neighbors[next][dir[2]] != -1
-				 and best_neighbors[best_neighbors[next][dir[2]]][dir[1]] != -1
-				 and best_neighbors[best_neighbors[best_neighbors[next][dir[2]]][dir[1]]][dir[0]] == placed_piece)):
-			cycle_bonus += 0.25
+			if (num_placed_neighbors_of_next == 1 and
+					(best_neighbors[neighbor, dir_a[2]] != -1
+					 and best_neighbors[best_neighbors[neighbor, dir_a[2]], dir_a[1]] != -1
+					 and best_neighbors[best_neighbors[best_neighbors[neighbor, dir_a[2]], dir_a[1]], dir_a[0]] == placed_piece)):
+				cycle_bonus += 0.25
 
-		if (counterClockwiseOfNext != None and numPlacedNeighborsOfNext == 1 and
-				(best_neighbors[next][dir[2]] != -1 and
-				 best_neighbors[best_neighbors[next][dir[2]]][dir[1]] == counterClockwiseOfNext)):
-			cycle_bonus += 0.25
+			if (counter_clockwise_of_next is not None and num_placed_neighbors_of_next == 1 and
+					(best_neighbors[neighbor, dir_a[2]] != -1 and
+					 best_neighbors[best_neighbors[neighbor, dir_a[2]], dir_a[1]] == counter_clockwise_of_next)):
+				cycle_bonus += 0.25
 
-		bestNeighborBonus = max((numBestNeighborRelationshipsOfNext - 2),
-								0)  # if 0,1,or 2 neighbors result is 0, else if 3-8 neighbors result is 1-6
-		neighborCountBonus = max((numPlacedNeighborsOfNext - 2),
-								 0)  # if 0,1,or 2 neighbors result is 0, else if 3 or 4 neighbors result is 1 or 2
-		nextA = np.zeros(3)
-		nextA[0] = next
-		nextA[1] = nextCol
-		nextA[2] = nextRow
-		if (construction_matrix[nextRow][nextCol] == EXPANSION_SPACE):  # if spot is available
-			# calculate the score if we were to place it there
-			placementScore = sumMutualCompatibility / numPlacedNeighborsOfNext
+			best_neighbor_bonus = max((num_best_neighbor_relationships_of_next - 2), 0)  # if 0,1,or 2 neighbors result is 0, else if 3-8 neighbors result is 1-6
+			neighbor_count_bonus = max((num_placed_neighbors_of_next - 2), 0)  # if 0,1,or 2 neighbors result is 0, else if 3 or 4 neighbors result is 1 or 2
 
-			if (check_cycles):
-				placementScore += cycle_bonus
-				placementScore += bestNeighborBonus * 0.2
+			if construction_matrix[neighbor_row, neighbor_col] != YES_PIECE:  # if spot is available
+				# calculate the score if we were to place it there
+				placement_score = sum_mutual_compatibility / num_placed_neighbors_of_next
 
-			elif not check_mutuality:  # *does* get a bonus for having more neighbors
-				placementScore += numPlacedNeighborsOfNext * 0.5
+				if check_cycles:
+					placement_score += cycle_bonus
+					placement_score += best_neighbor_bonus * 0.2
+				elif not check_mutuality:  # *does* get a bonus for having more neighbors
+					placement_score += num_placed_neighbors_of_next * 0.5
 
-			# put it in the pool
-			# todo add to pool correctly here
-			placementScoreToPiece.put(placementScore, nextA)
-
-	pass
+				# put it in the preference_pool
+				heapq.heappush(preference_pool, PoolCandidate(placement_score, neighbor, neighbor_row, neighbor_col))
 
 
-def block_dissimilarity_scores(pieces_placed, dissimilarity_scores, row_just_placed, col_just_placed, last_placed, construction_matrix):
+def block_dissimilarity_scores(patches_placed: Set[int], dissimilarity_scores: np.ndarray, row: int, col: int, placed_patch: int, construction_matrix: np.ndarray):
+	"""
+	TODO
+	:param patches_placed:
+	:param dissimilarity_scores:
+	:param row:
+	:param col:
+	:param placed_patch:
+	:param construction_matrix:
+	:return:
+	"""
+	if construction_matrix[row, col + 1] == YES_PIECE:
+		dissimilarity_scores[placed_patch, ROTATION_0, :] = INFINITY
+		dissimilarity_scores[:, ROTATION_180, placed_patch] = INFINITY
+	if construction_matrix[row, col - 1] == YES_PIECE:
+		dissimilarity_scores[placed_patch, ROTATION_180, :] = INFINITY
+		dissimilarity_scores[:, ROTATION_0, placed_patch] = INFINITY
+	if construction_matrix[row + 1, col] == YES_PIECE:
+		dissimilarity_scores[placed_patch, ROTATION_90, :] = INFINITY
+		dissimilarity_scores[:, ROTATION_270, placed_patch] = INFINITY
+	if construction_matrix[row - 1, col] == YES_PIECE:
+		dissimilarity_scores[placed_patch, ROTATION_270, :] = INFINITY
+		dissimilarity_scores[:, ROTATION_90, placed_patch] = INFINITY
 
-	if construction_matrix[row_just_placed][col_just_placed + 1] == YES_PIECE:
-		dissimilarity_scores[last_placed][ROTATION_0][:] = INFINITY
-		dissimilarity_scores[:][ROTATION_180][last_placed] = INFINITY
-	if construction_matrix[row_just_placed][col_just_placed - 1] == YES_PIECE:
-		dissimilarity_scores[last_placed][ROTATION_180][:] = INFINITY
-		dissimilarity_scores[:][ROTATION_0][last_placed] = INFINITY
-	if construction_matrix[row_just_placed + 1][col_just_placed] == YES_PIECE:
-		dissimilarity_scores[last_placed][ROTATION_90][:] = INFINITY
-		dissimilarity_scores[:][ROTATION_270][last_placed] = INFINITY
-	if construction_matrix[row_just_placed - 1][col_just_placed] == YES_PIECE:
-		dissimilarity_scores[last_placed][ROTATION_270][:] = INFINITY
-		dissimilarity_scores[:][ROTATION_90][last_placed] = INFINITY
-
-	for i in pieces_placed:
-		dissimilarity_scores[i][:][last_placed] = INFINITY
-		dissimilarity_scores[last_placed][:][i] = INFINITY
+	for i in patches_placed:
+		dissimilarity_scores[i, :, placed_patch] = INFINITY
+		dissimilarity_scores[placed_patch, :, i] = INFINITY
 
 
-def adjust_matrices(row, col, reconstruction_matrix, construction_matrix, pool):
-	construction_matrix[row][col] = YES_PIECE
+def adjust_matrices(row: int, col: int, reconstruction_matrix: np.ndarray, construction_matrix: np.ndarray, preference_pool: List[PoolCandidate]) -> Tuple[np.ndarray, np.ndarray]:
+	"""
+	TODO
+	:param row:
+	:param col:
+	:param reconstruction_matrix:
+	:param construction_matrix:
+	:param preference_pool:
+	:return:
+	"""
+	construction_matrix[row, col] = YES_PIECE
 	# resize reconstruction and construction matrices
 	if row == 0 or row == construction_matrix.shape[0] - 1:
 		new_scores_row = np.zeros((1, reconstruction_matrix.shape[1], 2), dtype=int)
 		new_construction_row = np.empty((1, construction_matrix.shape[1]), dtype=int)
 		new_construction_row[:, :] = NO_PIECE
 		if row == 0:  # we placed one on the top row
-			for piece in pool:
+			for piece in preference_pool:
 				piece.row += 1
 			reconstruction_matrix = np.concatenate((new_scores_row, reconstruction_matrix), axis=0)
 			construction_matrix = np.concatenate((new_construction_row, construction_matrix), axis=0)
@@ -716,7 +643,7 @@ def adjust_matrices(row, col, reconstruction_matrix, construction_matrix, pool):
 		new_construction_col = np.empty((construction_matrix.shape[0], 1), dtype=int)
 		new_construction_col[:, :] = NO_PIECE
 		if col == 0:  # we placed one on the left column
-			for piece in pool:
+			for piece in preference_pool:
 				piece.col += 1
 			reconstruction_matrix = np.concatenate((new_scores_col, reconstruction_matrix), axis=1)
 			construction_matrix = np.concatenate((new_construction_col, construction_matrix), axis=1)
@@ -731,6 +658,104 @@ def adjust_matrices(row, col, reconstruction_matrix, construction_matrix, pool):
 	for col_shift in [-1, 1]:
 		if construction_matrix[row, col + col_shift] == NO_PIECE:
 			construction_matrix[row, col + col_shift] = EXPANSION_SPACE
+	# return the new versions
+	return reconstruction_matrix, construction_matrix
+
+
+def solve_puzzle(
+		patches: List[np.ndarray], first_piece: int, dissimilarity_scores: np.ndarray, best_neighbors: np.ndarray, compatibility_scores: np.ndarray,
+		buddy_matrix: np.ndarray, rotations_shuffled: bool) -> np.ndarray:
+	"""
+	runs the main loop of greedy placement
+	:param patches: list of numpy arrays that are the actual patches (puzzle pieces)
+	:param first_piece: index/id of the patch that is to be placed first
+	:param dissimilarity_scores: array of dissimilarity scores between each pair of patches at a given orientation
+	:param best_neighbors: TODO
+	:param compatibility_scores: array of compatibility/confidence scores between each pair of patches at a given orientation
+	:param buddy_matrix: array of which patches are best buddies (mutual best neighbors) at a given orientation
+	:param rotations_shuffled: indicates if patches have been rotated as part of the scramble
+	:return: reconstruction matrix, shape (row, col, 2) where at a given location index 0 gives the patch index/id, and index 1 gives its rotation
+	"""
+	# need to add first piece to the puzzle
+	# need to correctly make the new puzzle (the one we're going to add pieces to one piece at a time) with the right dimensions etc.
+	# need to make a potential preference_pool which adds all the best buddies of the last piece placed
+	# then edge with best compatibility score is added to the puzzle
+	# construction_matrix needs to then be updated and reconstruction_matrix may need to have size updated
+	# if the preference_pool is empty, we have to re score best buddy matrix and exclude pieces that have already been placed
+	# continue the process until all pieces have been placed
+
+	num_pieces = buddy_matrix.shape[0]
+	pieces_remaining = num_pieces
+	reconstruction_matrix = np.zeros((3, 3, 2), dtype=int)
+	preference_pool: List[PoolCandidate] = list()  # max heap of PoolCandidates
+	pieces_placed = set()
+	with tqdm(total=num_pieces) as progress:
+		reconstruction_matrix[1, 1] = [first_piece, 0]  # Add the first piece, 0 refers to the rotation
+		construction_matrix = np.array([
+				[NO_PIECE, EXPANSION_SPACE, NO_PIECE],
+				[EXPANSION_SPACE, YES_PIECE, EXPANSION_SPACE],
+				[NO_PIECE, EXPANSION_SPACE, NO_PIECE]
+		])
+		block_dissimilarity_scores(pieces_placed, dissimilarity_scores, 1, 1, first_piece, construction_matrix)
+		pieces_placed.add(first_piece)
+		pieces_remaining -= 1
+		add_buddies_to_pool(first_piece, 1, 1, True, True, preference_pool, pieces_placed, best_neighbors, reconstruction_matrix, construction_matrix, compatibility_scores)
+		progress.update()
+
+		while pieces_remaining > 0:
+			if len(preference_pool) > 0:
+				# get next piece from the preference pool
+				next_piece = heapq.heappop(preference_pool)
+
+				if next_piece.index in pieces_placed or construction_matrix[next_piece.row, next_piece.col] == YES_PIECE:
+					# this piece is already placed; skip it
+					continue
+
+				can_add_piece = False
+				if next_piece.row > 0 and construction_matrix[next_piece.row - 1, next_piece.col] == YES_PIECE:
+					neighbor_up = reconstruction_matrix[next_piece.row - 1, next_piece.col, 0]
+					if best_neighbors[neighbor_up, ROTATION_270] == next_piece.index and best_neighbors[next_piece.index, ROTATION_90] == neighbor_up:
+						can_add_piece = True
+				if next_piece.row < construction_matrix.shape[0] - 1 and construction_matrix[next_piece.row + 1, next_piece.col] == YES_PIECE:
+					neighbor_down = reconstruction_matrix[next_piece.row + 1, next_piece.col, 0]
+					if best_neighbors[neighbor_down, ROTATION_90] == next_piece.index and best_neighbors[next_piece.index, ROTATION_270] == neighbor_down:
+						can_add_piece = True
+				if next_piece.col > 0 and construction_matrix[next_piece.row, next_piece.col - 1] == YES_PIECE:
+					neighbor_left = reconstruction_matrix[next_piece.row, next_piece.col - 1, 0]
+					if best_neighbors[neighbor_left, ROTATION_0] == next_piece.index and best_neighbors[next_piece.index, ROTATION_180] == neighbor_left:
+						can_add_piece = True
+				if next_piece.col < construction_matrix.shape[1] - 1 and construction_matrix[next_piece.row, next_piece.col + 1] == YES_PIECE:
+					neighbor_right = reconstruction_matrix[next_piece.row, next_piece.col + 1, 0]
+					if best_neighbors[neighbor_right, ROTATION_180] == next_piece.index and best_neighbors[next_piece.index, ROTATION_0] == neighbor_right:
+						can_add_piece = True
+
+				if not can_add_piece:
+					# can't do this piece in this spot
+					continue  # we already removed the piece using `heapq.heappop`
+
+				# place the piece
+				reconstruction_matrix[next_piece.row, next_piece.col] = [next_piece.index, 0]
+				reconstruction_matrix, construction_matrix = adjust_matrices(next_piece.row, next_piece.col, reconstruction_matrix, construction_matrix, preference_pool)
+				block_dissimilarity_scores(pieces_placed, dissimilarity_scores, next_piece.row, next_piece.col, next_piece.index, construction_matrix)
+				pieces_placed.add(next_piece.index)
+				pieces_remaining -= 1
+				# we already removed the piece using `heapq.heappop`
+				add_buddies_to_pool(
+						next_piece.index, next_piece.row, next_piece.col, True, True, preference_pool, pieces_placed,
+						best_neighbors, reconstruction_matrix, construction_matrix, compatibility_scores)
+				if pieces_remaining < num_pieces / 2:
+					add_buddies_to_pool(
+							next_piece.index, next_piece.row, next_piece.col, False, False, preference_pool, pieces_placed,
+							best_neighbors, reconstruction_matrix, construction_matrix, compatibility_scores)
+				progress.update()
+
+			else:  # preference_pool is empty
+				# TODO
+				# get_best_neighbors_dissimilarity()
+				# addCandidates
+				pass
+
+	return reconstruction_matrix[1:-1, 1:-1, :]  # trim off padding edges
 
 
 def jigsaw_pt(patches: List[np.ndarray], rotations_shuffled: bool = True, use_lab_color: bool = True):
@@ -765,6 +790,6 @@ def jigsaw_pt(patches: List[np.ndarray], rotations_shuffled: bool = True, use_la
 	print("selecting first piece...")
 	first_piece = pick_first_piece(buddy_matrix, compatibility_scores, best_neighbors_compatibility, rotations_shuffled)
 	print(f"first piece selected: {first_piece}")
-	# TODO: actually implement the body of the algorithm (added solve_puzzle function for this below)
+	print("running main placement loop...")
 	reconstruction_matrix = solve_puzzle(patches, first_piece, dissimilarity_scores, best_neighbors_compatibility, compatibility_scores, buddy_matrix, rotations_shuffled)
 	return reconstruction_matrix
