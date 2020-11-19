@@ -202,9 +202,10 @@ def compatibility_score(dissimilarity_scores: np.ndarray, best_neighbors_dissimi
 		relevant_slice = np.copy(dissimilarity_scores[patch_index, r, :])
 		scores_to_return = np.empty_like(relevant_slice)
 		best_d_j = best_neighbors_dissimilarity[patch_index, r]
-		# best_d_score = dissimilarity_scores[patch_index, r, best_d_j]
+		best_d_score = dissimilarity_scores[patch_index, r, best_d_j]
 		relevant_slice[best_d_j] = INFINITY
 		next_best_d_score = np.amin(relevant_slice)  # if there is no second-best, this will raise a ValueError
+		relevant_slice[best_d_j] = best_d_score
 		for patch_index2 in range(scores_to_return.shape[0]):
 			if next_best_d_score != 0:
 				scores_to_return[patch_index2] = 1.0 - (relevant_slice[patch_index2] / next_best_d_score)
@@ -327,12 +328,12 @@ def get_best_buddies(compatibility_scores: np.ndarray, rotations_shuffled: bool 
 	return buddy_matrix
 
 
-def pick_first_piece(buddy_matrix: np.ndarray, compatibility_scores: np.ndarray, best_neighbors_dissimilarity: np.ndarray, rotations_shuffled: bool = True) -> int:
+def pick_first_piece(buddy_matrix: np.ndarray, compatibility_scores: np.ndarray, best_neighbors_compatibility: np.ndarray, rotations_shuffled: bool = True) -> int:
 	"""
 	takes info about best buddies and compatibility scores and selects the first piece to be placed
 	:param buddy_matrix: the matrix indicating the best buddy of each piece, if any, as a numpy of shape (n, 4) containing tuples of form (piece_index, rotation_index)
 	:param compatibility_scores: the matrix of all compatibility scores as a numpy array of shape (n, 4, n[, 4)], where n is the total number of patches
-	:param best_neighbors_dissimilarity: TODO
+	:param best_neighbors_compatibility: TODO
 	:param rotations_shuffled: indicates if the patches have been rotated randomly (vs all being rotated correctly to start with)
 	:return: the index of the patch that is selected as our first piece to place
 	"""
@@ -366,7 +367,7 @@ def pick_first_piece(buddy_matrix: np.ndarray, compatibility_scores: np.ndarray,
 	if highest_buddy_count != 0:  # pick the piece that has the best sum of mutual compatibility scores with its best buddies
 		matrix_to_use = buddy_matrix
 	else:  # pick the piece that has the best sum of mutual compatibility scores with its best-scoring neighbors
-		matrix_to_use = best_neighbors_dissimilarity
+		matrix_to_use = best_neighbors_compatibility
 	best_score = -INFINITY
 	best_index = -1
 	for i in candidates:
