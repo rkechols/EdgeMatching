@@ -709,7 +709,7 @@ def solve_puzzle(
 	# if the preference_pool is empty, we have to re score best buddy matrix and exclude pieces that have already been placed
 	# continue the process until all pieces have been placed
 
-	num_pieces = buddy_matrix.shape[0]
+	num_pieces = best_neighbors.shape[0]
 	pieces_remaining = num_pieces
 	reconstruction_matrix = np.zeros((3, 3, 2), dtype=int)
 	preference_pool: List[PoolCandidate] = list()  # max heap of PoolCandidates
@@ -775,9 +775,15 @@ def solve_puzzle(
 				progress.update()
 
 			else:  # preference_pool is empty
-				# get_best_neighbors_dissimilarity() #todo, what function do we need to call here?
+				print("computing best neighbors by dissimilarity...")
+				best_neighbors_dissimilarity = get_best_neighbors(dissimilarity_scores, rotations_shuffled)
+				print("computing compatibility scores...")
+				compatibility_scores = get_compatibility_scores(dissimilarity_scores, best_neighbors_dissimilarity, rotations_shuffled)
+				print("computing best neighbors by compatibility...")
+				best_neighbors = get_best_neighbors(compatibility_scores, rotations_shuffled)
+				# print("finding initial best buddies...")
+				# buddy_matrix = get_best_buddies(compatibility_scores, rotations_shuffled)
 				add_candidates(construction_matrix, reconstruction_matrix, preference_pool, pieces_placed, best_neighbors, compatibility_scores)
-				pass
 
 	return reconstruction_matrix[1:-1, 1:-1, :]  # trim off padding edges
 
