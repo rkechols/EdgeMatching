@@ -588,11 +588,12 @@ def add_buddies_to_pool(
 def block_dissimilarity_scores(patches_placed: Set[int], dissimilarity_scores: np.ndarray, row: int, col: int, placed_patch: int, construction_matrix: np.ndarray):
 	"""
 	TODO
-	:param patches_placed:
+	Sets dissimilarity scores to infinity of location of piece just placed, and pieces_placed which had score with said piece
+	:param patches_placed: pieces that have been placed so far
 	:param dissimilarity_scores:
-	:param row:
-	:param col:
-	:param placed_patch:
+	:param row: row of piece just placed
+	:param col: col of piece just placed
+	:param placed_patch: index of piece just placed
 	:param construction_matrix:
 	:return:
 	"""
@@ -614,15 +615,39 @@ def block_dissimilarity_scores(patches_placed: Set[int], dissimilarity_scores: n
 		dissimilarity_scores[placed_patch, :, i] = INFINITY
 
 
+def add_candidates(construction_matrix: np.ndarray, reconstruction_matrix: np.ndarray, preference_pool: List[PoolCandidate],
+					pieces_placed: Set[int], best_neighbors: np.ndarray, compatibility_scores: np.ndarray):
+	"""
+	Calls add_buddies_to_pool for each piece that has been already placed that has an open neighbor
+	Used to repopulate the pool
+	:param construction_matrix:
+	:param reconstruction_matrix:
+	:param preference_pool:
+	:param pieces_placed:
+	:param best_neighbors:
+	:param compatibility_scores:
+	:return:
+	"""
+	for row in range(construction_matrix.shape[0]):
+		for col in range(construction_matrix.shape[1]):
+			if construction_matrix[row, col] == YES_PIECE:
+				if construction_matrix[row + 1, col] == EXPANSION_SPACE or construction_matrix[row - 1, col] == EXPANSION_SPACE \
+						or construction_matrix[row, col + 1] == EXPANSION_SPACE or construction_matrix[row, col - 1] == EXPANSION_SPACE:
+					add_buddies_to_pool(reconstruction_matrix[row, col, 0], row, col, False, False, preference_pool, pieces_placed,  # checkMutuality false for now
+										best_neighbors, reconstruction_matrix, construction_matrix, compatibility_scores)
+
+
 def adjust_matrices(row: int, col: int, reconstruction_matrix: np.ndarray, construction_matrix: np.ndarray, preference_pool: List[PoolCandidate]) -> Tuple[np.ndarray, np.ndarray]:
 	"""
-	TODO
-	:param row:
-	:param col:
-	:param reconstruction_matrix:
-	:param construction_matrix:
-	:param preference_pool:
-	:return:
+	Expands reconstruction matrix and construction matrix,
+	updates values in construction matrix (NO_PIECE -> EXPANSION_PIECE etc)
+	also updates the coordinates in preference pool
+	:param row: row of the piece just added
+	:param col: col of the piece just added
+	:param reconstruction_matrix: current reconstruction matrix with pieces of puzzle building
+	:param construction_matrix: current construction matrix which has constants that represent if a piece is there or can be added
+	:param preference_pool: current preference pool which holds pieces and their potential coordinates
+	:return: updated reconstruction matrix and construction matrix
 	"""
 	construction_matrix[row, col] = YES_PIECE
 	# resize reconstruction and construction matrices
@@ -751,9 +776,8 @@ def solve_puzzle(
 				progress.update()
 
 			else:  # preference_pool is empty
-				# TODO
-				# get_best_neighbors_dissimilarity()
-				# addCandidates
+				# get_best_neighbors_dissimilarity() #todo, what function do we need to call here?
+				add_candidates(construction_matrix, reconstruction_matrix, preference_pool, pieces_placed, best_neighbors, compatibility_scores)
 				pass
 
 	return reconstruction_matrix[1:-1, 1:-1, :]  # trim off padding edges
