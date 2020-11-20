@@ -104,7 +104,8 @@ if __name__ == "__main__":
 	ps = 28
 	rotations = False
 	original_patched, dimensions = patch_image(original_image, ps)
-	patch_list, shuffle_dictionary = scramble_image(original_patched, seed=4, rotation_shuffle=rotations)
+	# patch_list, shuffle_dictionary = scramble_image(original_patched, seed=4, rotation_shuffle=rotations)
+	patch_list = original_patched  # no shuffling
 	show_image(assemble_patches(patch_list, original_image.shape[1] // ps), "scrambled")
 	# hypothetical_min = 85 + (15.038 * math.log(ps))
 	# hypothetical_max = 255 - (14.235 * math.log(ps))
