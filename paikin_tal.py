@@ -232,7 +232,10 @@ def compatibility_score(dissimilarity_scores: np.ndarray, best_neighbors_dissimi
 		for patch_index2 in range(scores_to_return.shape[0]):
 			for r2 in range(scores_to_return.shape[1]):
 				if next_best_d_score != 0:
-					scores_to_return[patch_index2, r2] = 1.0 - (relevant_slice[patch_index2, r2] / next_best_d_score)
+					if relevant_slice[patch_index2, r2] == INFINITY and next_best_d_score == INFINITY:
+						scores_to_return[patch_index2] = 0.0
+					else:
+						scores_to_return[patch_index2, r2] = 1.0 - (relevant_slice[patch_index2, r2] / next_best_d_score)
 				else:
 					scores_to_return[patch_index2, r2] = 0.001
 	else:
