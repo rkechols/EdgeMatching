@@ -4,7 +4,7 @@ import numpy as np
 import random
 from functions import assemble_patches, load_image_from_disk, show_image, assemble_image
 from kruskal import jigsaw_kruskals
-from paikin_tal import jigsaw_pt
+from paikin_tal import PTSolver
 from accuracy import verify_accuracy
 from prim import jigsaw_prims
 
@@ -108,7 +108,7 @@ if __name__ == "__main__":
 
 	# patch_list, shuffle_dictionary = scramble_image(original_patched, seed=4, rotation_shuffle=rotations)
 	patch_list = original_patched  # no shuffling
-	shuffle_dictionary = {i: (i, 0) for i in range(len(patch_list))}
+	shuffle_dictionary = { i: (i, 0) for i in range(len(patch_list)) }
 
 	show_image(assemble_patches(patch_list, original_image.shape[1] // ps), "scrambled")
 	# hypothetical_min = 85 + (15.038 * math.log(ps))
@@ -117,7 +117,7 @@ if __name__ == "__main__":
 	# reconstruction_matrix = jigsaw_kruskals(patch_list)
 	# reconstructed_image = assemble_image(patch_list, reconstruction_matrix)
 	# reconstructed_image = jigsaw_prims(patch_list)
-	reconstruction_matrix = jigsaw_pt(patch_list, rotations_shuffled=rotations)
+	reconstruction_matrix = PTSolver(patch_list, rotations_shuffled=rotations, use_lab_color=True).solve()
 
 	if reconstruction_matrix is not None:
 		reconstructed_image = assemble_image(patch_list, reconstruction_matrix)
@@ -125,8 +125,8 @@ if __name__ == "__main__":
 		show_image(reconstructed_image, "final answer")
 		accuracy, location_accuracy, relative_accuracy = verify_accuracy(reconstruction_matrix, shuffle_dictionary, dimensions)
 		show_image(reconstructed_image, "final answer")
-		print("Absolute accuracy: " + str(accuracy * 100) + "%")
-		print("with " + str(location_accuracy * 100) + "% in the correct position")
-		print("Relative accuracy: " + str(relative_accuracy * 100) + "%")
+		print(f"Absolute accuracy: {accuracy * 100}%")
+		print(f"with {location_accuracy * 100}% in the correct position")
+		print(f"Relative accuracy: {relative_accuracy * 100}%")
 	else:
 		print("reconstructed_image is None")
