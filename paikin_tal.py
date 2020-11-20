@@ -479,6 +479,7 @@ class PTSolver:
 				w2 = 0.5
 
 				# TODO: Need to use the actual indices for the construction matrix and best buddies
+				# TODO: These need extra checks to make sure they don't go out of bounds on self.construction_matrix
 
 				if self.construction_matrix[neighbor_row - 1, neighbor_col] == YES_PIECE and best_neighbors[self.construction_matrix[neighbor_row - 1, neighbor_col] - 1][1] == neighbor:
 					# there's a piece above and is best neighbor up
