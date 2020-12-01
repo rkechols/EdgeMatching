@@ -294,6 +294,7 @@ def rgb_to_lab(rgb_image: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(rgb_image, cv2.COLOR_RGB2LAB)
 
 
+
 def lab_to_rgb(lab_image: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(lab_image, cv2.COLOR_LAB2RGB)
 
@@ -342,7 +343,7 @@ def rgb2lab(R, G, B):
         fx = (float)((k * xr + 16.) / 116.)
 
     if (yr > eps):
-        fy = (float)((k * yr + 16.) / 116.)
+        fy = (float)(math.pow(yr, 1 / 3.))
     else:
         fy = (float)((k * yr + 16.) / 116.)
 

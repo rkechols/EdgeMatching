@@ -6,7 +6,7 @@ from typing import List, Set, Tuple
 import numpy as np
 from constants import INFINITY, NO_PIECE, EXPANSION_SPACE, YES_PIECE, ROTATION_0, ROTATION_180, ROTATION_90, ROTATION_270
 from tqdm import tqdm
-from functions import rgb_to_lab
+from functions import rgb_to_lab, rgb2lab
 
 
 def predict_3rd_pixel(col1: np.ndarray, col2: np.ndarray, use_lab_color: bool) -> np.ndarray:
@@ -235,7 +235,19 @@ class PTSolver:
 		self.rotations_shuffled = rotations_shuffled
 		self.use_lab_color = use_lab_color
 		if self.use_lab_color:
-			self.patches = [rgb_to_lab(p) for p in self.patches]
+			#self.patches = [rgb_to_lab(p) for p in self.patches]
+			for i in range(len(self.patches)):
+				for j in range(self.patches[i].shape[0]):
+					for k in range(self.patches[i].shape[1]):
+						R=self.patches[i][j][k][0]
+						G=self.patches[i][j][k][1]
+						B=self.patches[i][j][k][2]
+						lab = rgb2lab(R,G,B)
+						self.patches[i][j][k][0] = lab[0]
+						self.patches[i][j][k][1] = lab[1]
+						self.patches[i][j][k][2] = lab[2]
+
+
 
 		self.prediction_matrix = np.empty((self.n, 4), dtype=np.ndarray)
 		self.average_edge_colors = np.empty((self.n, 4, 3), dtype=np.float)  # 4 edges, 3 channels
