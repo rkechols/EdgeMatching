@@ -58,6 +58,8 @@ def norm_l1(col1: np.ndarray, col2: np.ndarray) -> float:
 	:param col2: the second list of pixels as a numpy array of shape (x, 3)
 	:return: the L_1 norm
 	"""
+	col1 = col1.astype(int)
+	col2 = col2.astype(int)
 	diff_col = abs(col1 - col2)
 	return float(sum(diff_col.flatten()))
 
