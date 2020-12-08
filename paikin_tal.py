@@ -122,11 +122,12 @@ class DissimilarityScorePtMpGenerator:
 			return n * 4 * n
 
 
-def get_best_neighbors(scores_matrix: np.ndarray, rotations_shuffled: bool = True) -> np.ndarray:
+def get_best_neighbors(scores_matrix: np.ndarray, rotations_shuffled: bool = True, for_min: bool = True) -> np.ndarray:
 	"""
 	TODO
 	:param scores_matrix:
 	:param rotations_shuffled: indicates if the patches have been rotated randomly (vs all being rotated correctly to start with)
+	:param for_min:
 	:return:
 	"""
 	n = scores_matrix.shape[0]
@@ -139,12 +140,18 @@ def get_best_neighbors(scores_matrix: np.ndarray, rotations_shuffled: bool = Tru
 		for r1 in range(scores_matrix.shape[1]):
 			if rotations_shuffled:
 				relevant_section = scores_matrix[i, r1, :, :]
-				best_dissimilarity = np.where(relevant_section == np.amin(relevant_section))
-				best_neighbors[i, r1] = list(zip(*best_dissimilarity))[0]  # just take the first if there's a tie
+				if for_min:
+					best_score = np.where(relevant_section == np.amin(relevant_section))
+				else:
+					best_score = np.where(relevant_section == np.amax(relevant_section))
+				best_neighbors[i, r1] = list(zip(*best_score))[0]  # just take the first if there's a tie
 			else:
 				relevant_section = scores_matrix[i, r1, :]
-				best_dissimilarity = np.where(relevant_section == np.amin(relevant_section))
-				best_neighbors[i, r1] = best_dissimilarity[0][0]  # just take the first if there's a tie
+				if for_min:
+					best_score = np.where(relevant_section == np.amin(relevant_section))
+				else:
+					best_score = np.where(relevant_section == np.amax(relevant_section))
+				best_neighbors[i, r1] = best_score[0][0]  # just take the first if there's a tie
 	return best_neighbors
 
 
@@ -713,7 +720,7 @@ class PTSolver:
 				else:  # preference_pool is empty
 					best_neighbors_dissimilarity = get_best_neighbors(self.dissimilarity_scores, self.rotations_shuffled)
 					self.get_compatibility_scores(best_neighbors_dissimilarity)
-					best_neighbors = get_best_neighbors(self.compatibility_scores, self.rotations_shuffled)
+					best_neighbors = get_best_neighbors(self.compatibility_scores, self.rotations_shuffled, for_min=False)
 					# print("finding initial best buddies...")
 					# buddy_matrix = get_best_buddies(compatibility_scores, rotations_shuffled)
 					self.add_candidates(best_neighbors)
@@ -741,7 +748,7 @@ class PTSolver:
 		print("computing initial compatibility scores...")
 		self.get_compatibility_scores(best_neighbors_dissimilarity)
 		print("computing best neighbors by compatibility...")
-		best_neighbors_compatibility = get_best_neighbors(self.compatibility_scores, self.rotations_shuffled)
+		best_neighbors_compatibility = get_best_neighbors(self.compatibility_scores, self.rotations_shuffled, for_min=False)
 		print("finding initial best buddies...")
 		self.get_best_buddies()
 		self.count_best_buddies()
