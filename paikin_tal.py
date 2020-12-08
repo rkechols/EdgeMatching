@@ -166,6 +166,10 @@ def calc_compatibility_score_row(dissimilarity_scores: np.ndarray, best_neighbor
 		next_best_d_score = np.amin(
 			relevant_slice[relevant_slice != best_d_score])  # if there is no second-best, this will raise a ValueError
 		for patch_index2 in range(scores_to_return.shape[0]):
+			if patch_index2 == patch_index:
+				# we're looking at a compatibility score from a piece to itself
+				scores_to_return[patch_index2, :] = -INFINITY
+				continue
 			for r2 in range(scores_to_return.shape[1]):
 				if next_best_d_score != 0:
 					if relevant_slice[patch_index2, r2] == INFINITY and next_best_d_score == INFINITY:
@@ -183,7 +187,10 @@ def calc_compatibility_score_row(dissimilarity_scores: np.ndarray, best_neighbor
 		next_best_d_score = np.amin(relevant_slice)  # if there is no second-best, this will raise a ValueError
 		relevant_slice[best_d_j] = best_d_score
 		for patch_index2 in range(scores_to_return.shape[0]):
-			if next_best_d_score != 0:
+			if patch_index2 == patch_index:
+				# we're looking at a compatibility score from a piece to itself
+				scores_to_return[patch_index2] = -INFINITY
+			elif next_best_d_score != 0:
 				if relevant_slice[patch_index2] == INFINITY and next_best_d_score == INFINITY:
 					scores_to_return[patch_index2] = 0.0
 				else:
