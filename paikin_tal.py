@@ -665,6 +665,7 @@ class PTSolver:
 		for col_shift in [-1, 1]:
 			if self.construction_matrix[row, col + col_shift] == NO_PIECE:
 				self.construction_matrix[row, col + col_shift] = EXPANSION_SPACE
+		return row, col
 
 	def greedy_placement_loop(self, first_piece: int, best_neighbors: np.ndarray):
 		# need to add first piece to the puzzle
@@ -716,7 +717,7 @@ class PTSolver:
 
 					# place the piece
 					self.reconstruction_matrix[next_piece.row, next_piece.col] = [next_piece.index, 0]
-					self.adjust_matrices(next_piece.row, next_piece.col)
+					next_piece.row, next_piece.col = self.adjust_matrices(next_piece.row, next_piece.col)
 					self.block_dissimilarity_scores(next_piece.row, next_piece.col, next_piece.index)
 					self.patches_placed.add(next_piece.index)
 					pieces_remaining -= 1
