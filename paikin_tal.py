@@ -536,20 +536,25 @@ class PTSolver:
 				sum_mutual_compatibility = 0  # aggregates a compatibility of potential neighbors
 				num_placed_neighbors_of_next = 0  # counts how many neighbors it would have if placed
 				if neighbor_row > 0 and self.construction_matrix[neighbor_row - 1, neighbor_col] == YES_PIECE:  # if there is a piece above nextA
-					sum_mutual_compatibility += (w1 * self.compatibility_scores[1, self.construction_matrix[neighbor_row - 1, neighbor_col] - 1][neighbor]) + (w2 * self.compatibility_scores[0, neighbor, self.construction_matrix[neighbor_row - 1, neighbor_col] - 1])
+					#sum_mutual_compatibility += (w1 * self.compatibility_scores[1, self.construction_matrix[neighbor_row - 1, neighbor_col] - 1][neighbor]) + (w2 * self.compatibility_scores[0, neighbor, self.construction_matrix[neighbor_row - 1, neighbor_col] - 1])
+					sum_mutual_compatibility += (w1 * self.compatibility_scores[self.construction_matrix[neighbor_row - 1, neighbor_col] - 1,1, neighbor]) + (w2 * self.compatibility_scores[neighbor,0, self.construction_matrix[neighbor_row - 1, neighbor_col] - 1])
+
 					# w1 * confidence score FROM piece above TO nextA oriented down (1) # w2 * confidence score TO piece above FROM nextA oriented up (0)
 					num_placed_neighbors_of_next += 1
 
 				if neighbor_row < self.construction_matrix.shape[0] - 1 and self.construction_matrix[neighbor_row + 1, neighbor_col] == YES_PIECE:
-					sum_mutual_compatibility += (w1 * self.compatibility_scores[0, self.construction_matrix[neighbor_row + 1, neighbor_col] - 1][neighbor]) + (w2 * self.compatibility_scores[1, neighbor, self.construction_matrix[neighbor_row + 1, neighbor_col] - 1])
+					#sum_mutual_compatibility += (w1 * self.compatibility_scores[0, self.construction_matrix[neighbor_row + 1, neighbor_col] - 1][neighbor]) + (w2 * self.compatibility_scores[1, neighbor, self.construction_matrix[neighbor_row + 1, neighbor_col] - 1])
+					sum_mutual_compatibility += (w1 * self.compatibility_scores[self.construction_matrix[neighbor_row + 1, neighbor_col] - 1,0, neighbor]) + (w2 * self.compatibility_scores[neighbor,1, self.construction_matrix[neighbor_row + 1, neighbor_col] - 1])
 					num_placed_neighbors_of_next += 1
 
 				if neighbor_col > 0 and self.construction_matrix[neighbor_row, neighbor_col - 1] == YES_PIECE:
-					sum_mutual_compatibility += (w1 * self.compatibility_scores[3, self.construction_matrix[neighbor_row, neighbor_col - 1] - 1][neighbor]) + (w2 * self.compatibility_scores[2, neighbor, self.construction_matrix[neighbor_row, neighbor_col - 1] - 1])
+					#sum_mutual_compatibility += (w1 * self.compatibility_scores[3, self.construction_matrix[neighbor_row, neighbor_col - 1] - 1][neighbor]) + (w2 * self.compatibility_scores[2, neighbor, self.construction_matrix[neighbor_row, neighbor_col - 1] - 1])
+					sum_mutual_compatibility += (w1 * self.compatibility_scores[self.construction_matrix[neighbor_row, neighbor_col - 1] - 1,3, neighbor]) + (w2 * self.compatibility_scores[neighbor,2, self.construction_matrix[neighbor_row, neighbor_col - 1] - 1])
 					num_placed_neighbors_of_next += 1
 
 				if neighbor_col < self.construction_matrix.shape[1] - 1 and self.construction_matrix[neighbor_row, neighbor_col + 1] == YES_PIECE:
-					sum_mutual_compatibility += (w1 * self.compatibility_scores[2, self.construction_matrix[neighbor_row, neighbor_col + 1] - 1][neighbor]) + (w2 * self.compatibility_scores[3, neighbor, self.construction_matrix[neighbor_row, neighbor_col + 1] - 1])
+					#sum_mutual_compatibility += (w1 * self.compatibility_scores[2, self.construction_matrix[neighbor_row, neighbor_col + 1] - 1][neighbor]) + (w2 * self.compatibility_scores[3, neighbor, self.construction_matrix[neighbor_row, neighbor_col + 1] - 1])
+					sum_mutual_compatibility += (w1 * self.compatibility_scores[self.construction_matrix[neighbor_row, neighbor_col + 1] - 1,2, neighbor]) + (w2 * self.compatibility_scores[neighbor,3, self.construction_matrix[neighbor_row, neighbor_col + 1] - 1])
 					num_placed_neighbors_of_next += 1
 
 				cycle_bonus = 0.0
