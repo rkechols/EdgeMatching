@@ -735,7 +735,7 @@ class PTSolver:
 					# buddy_matrix = get_best_buddies(compatibility_scores, rotations_shuffled)
 					self.add_candidates(best_neighbors)
 
-		return self.reconstruction_matrix[1:-1, 1:-1, :]  # trim off padding edges
+		self.reconstruction_matrix = self.reconstruction_matrix[1:-1, 1:-1, :]  # trim off padding edges
 
 	def count_best_buddies(self):
 		total_slots = self.buddy_matrix.shape[0] * self.buddy_matrix.shape[1]
