@@ -507,7 +507,7 @@ class PTSolver:
 				w2 = 0.5
 
 
-				if neighbor_row > 0 and self.construction_matrix[neighbor_row - 1, neighbor_col] == YES_PIECE and best_neighbors[self.reconstruction_matrix[neighbor_row - 1, neighbor_col], 0][ROTATION_90] == neighbor:
+				if neighbor_row > 0 and self.construction_matrix[neighbor_row - 1, neighbor_col] == YES_PIECE and best_neighbors[self.reconstruction_matrix[neighbor_row - 1, neighbor_col, 0]][ROTATION_90] == neighbor:
 					# there's a piece above and is best neighbor up
 					num_best_neighbor_relationships_of_next += 1
 
@@ -537,24 +537,28 @@ class PTSolver:
 				num_placed_neighbors_of_next = 0  # counts how many neighbors it would have if placed
 				if neighbor_row > 0 and self.construction_matrix[neighbor_row - 1, neighbor_col] == YES_PIECE:  # if there is a piece above nextA
 					#sum_mutual_compatibility += (w1 * self.compatibility_scores[1, self.construction_matrix[neighbor_row - 1, neighbor_col] - 1][neighbor]) + (w2 * self.compatibility_scores[0, neighbor, self.construction_matrix[neighbor_row - 1, neighbor_col] - 1])
-					sum_mutual_compatibility += (w1 * self.compatibility_scores[self.construction_matrix[neighbor_row - 1, neighbor_col] - 1,1, neighbor]) + (w2 * self.compatibility_scores[neighbor,0, self.construction_matrix[neighbor_row - 1, neighbor_col] - 1])
+					sum_mutual_compatibility += (w1 * self.compatibility_scores[self.reconstruction_matrix[neighbor_row - 1, neighbor_col, 0], ROTATION_270, neighbor]) \
+												+ (w2 * self.compatibility_scores[neighbor, ROTATION_90, self.reconstruction_matrix[neighbor_row - 1, neighbor_col, 0]])
 
 					# w1 * confidence score FROM piece above TO nextA oriented down (1) # w2 * confidence score TO piece above FROM nextA oriented up (0)
 					num_placed_neighbors_of_next += 1
 
 				if neighbor_row < self.construction_matrix.shape[0] - 1 and self.construction_matrix[neighbor_row + 1, neighbor_col] == YES_PIECE:
 					#sum_mutual_compatibility += (w1 * self.compatibility_scores[0, self.construction_matrix[neighbor_row + 1, neighbor_col] - 1][neighbor]) + (w2 * self.compatibility_scores[1, neighbor, self.construction_matrix[neighbor_row + 1, neighbor_col] - 1])
-					sum_mutual_compatibility += (w1 * self.compatibility_scores[self.construction_matrix[neighbor_row + 1, neighbor_col] - 1,0, neighbor]) + (w2 * self.compatibility_scores[neighbor,1, self.construction_matrix[neighbor_row + 1, neighbor_col] - 1])
+					sum_mutual_compatibility += (w1 * self.compatibility_scores[self.reconstruction_matrix[neighbor_row + 1, neighbor_col, 0] - 1, ROTATION_90, neighbor]) \
+												+ (w2 * self.compatibility_scores[neighbor, ROTATION_270, self.reconstruction_matrix[neighbor_row + 1, neighbor_col, 0]])
 					num_placed_neighbors_of_next += 1
 
 				if neighbor_col > 0 and self.construction_matrix[neighbor_row, neighbor_col - 1] == YES_PIECE:
 					#sum_mutual_compatibility += (w1 * self.compatibility_scores[3, self.construction_matrix[neighbor_row, neighbor_col - 1] - 1][neighbor]) + (w2 * self.compatibility_scores[2, neighbor, self.construction_matrix[neighbor_row, neighbor_col - 1] - 1])
-					sum_mutual_compatibility += (w1 * self.compatibility_scores[self.construction_matrix[neighbor_row, neighbor_col - 1] - 1,3, neighbor]) + (w2 * self.compatibility_scores[neighbor,2, self.construction_matrix[neighbor_row, neighbor_col - 1] - 1])
+					sum_mutual_compatibility += (w1 * self.compatibility_scores[self.reconstruction_matrix[neighbor_row, neighbor_col - 1, 0], ROTATION_0, neighbor]) \
+												+ (w2 * self.compatibility_scores[neighbor, ROTATION_180, self.reconstruction_matrix[neighbor_row, neighbor_col - 1, 0]])
 					num_placed_neighbors_of_next += 1
 
 				if neighbor_col < self.construction_matrix.shape[1] - 1 and self.construction_matrix[neighbor_row, neighbor_col + 1] == YES_PIECE:
 					#sum_mutual_compatibility += (w1 * self.compatibility_scores[2, self.construction_matrix[neighbor_row, neighbor_col + 1] - 1][neighbor]) + (w2 * self.compatibility_scores[3, neighbor, self.construction_matrix[neighbor_row, neighbor_col + 1] - 1])
-					sum_mutual_compatibility += (w1 * self.compatibility_scores[self.construction_matrix[neighbor_row, neighbor_col + 1] - 1,2, neighbor]) + (w2 * self.compatibility_scores[neighbor,3, self.construction_matrix[neighbor_row, neighbor_col + 1] - 1])
+					sum_mutual_compatibility += (w1 * self.compatibility_scores[self.reconstruction_matrix[neighbor_row, neighbor_col + 1, 0], ROTATION_180, neighbor])\
+												+ (w2 * self.compatibility_scores[neighbor, ROTATION_0, self.reconstruction_matrix[neighbor_row, neighbor_col + 1, 0]])
 					num_placed_neighbors_of_next += 1
 
 				cycle_bonus = 0.0
@@ -565,11 +569,11 @@ class PTSolver:
 						 and best_neighbors[best_neighbors[best_neighbors[neighbor, dir_a[0]], dir_a[1]], dir_a[2]] == placed_piece)):
 					cycle_bonus += 0.25
 
-				# if (clockwise_of_next is not None and num_placed_neighbors_of_next == 1 and  # if next has ONE placed clockwise neighbor #TODO- fix this, I commented these out because they weren't working (clockwise_of_next is not an integer)
-				# 		(best_neighbors[neighbor, dir_a[0]] != -1 and  # and has a best neighbor in that direction
-				# 		 best_neighbors[best_neighbors[neighbor, dir_a[0]], dir_a[1]] == clockwise_of_next)):  # ????
-				# 	cycle_bonus += 0.25
-				# 	print("???")
+				if (clockwise_of_next is not None and num_placed_neighbors_of_next == 1 and  # if next has ONE placed clockwise neighbor
+						(best_neighbors[neighbor, dir_a[0]] != -1 and  # and has a best neighbor in that direction
+						 best_neighbors[best_neighbors[neighbor, dir_a[0]], dir_a[1]] == clockwise_of_next[0])):  # ????
+					cycle_bonus += 0.25
+					print("???")
 
 				if (num_placed_neighbors_of_next == 1 and
 						(best_neighbors[neighbor, dir_a[2]] != -1
@@ -577,10 +581,10 @@ class PTSolver:
 						 and best_neighbors[best_neighbors[best_neighbors[neighbor, dir_a[2]], dir_a[1]], dir_a[0]] == placed_piece)):
 					cycle_bonus += 0.25
 
-				# if (counter_clockwise_of_next is not None and num_placed_neighbors_of_next == 1 and
-				# 		(best_neighbors[neighbor, dir_a[2]] != -1 and
-				# 		 best_neighbors[best_neighbors[neighbor, dir_a[2]], dir_a[1]] == counter_clockwise_of_next)):
-				# 	cycle_bonus += 0.25
+				if (counter_clockwise_of_next is not None and num_placed_neighbors_of_next == 1 and
+						(best_neighbors[neighbor, dir_a[2]] != -1 and
+						 best_neighbors[best_neighbors[neighbor, dir_a[2]], dir_a[1]] == counter_clockwise_of_next[0])):
+					cycle_bonus += 0.25
 
 				best_neighbor_bonus = max((num_best_neighbor_relationships_of_next - 2), 0)  # if 0,1,or 2 neighbors result is 0, else if 3-8 neighbors result is 1-6
 				neighbor_count_bonus = max((num_placed_neighbors_of_next - 2), 0)  # if 0,1,or 2 neighbors result is 0, else if 3 or 4 neighbors result is 1 or 2
