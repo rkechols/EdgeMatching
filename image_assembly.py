@@ -117,7 +117,7 @@ if __name__ == "__main__":
 	# reconstruction_matrix = jigsaw_kruskals(patch_list)
 	# reconstructed_image = assemble_image(patch_list, reconstruction_matrix)
 	# reconstructed_image = jigsaw_prims(patch_list)
-	reconstruction_matrix = PTSolver(patch_list, rotations_shuffled=rotations, use_lab_color=True).solve()
+	reconstruction_matrix = PTSolver(copy.deepcopy(patch_list), rotations_shuffled=rotations, use_lab_color=True).solve()
 
 	if reconstruction_matrix is not None:
 		reconstructed_image = assemble_image(patch_list, reconstruction_matrix)
