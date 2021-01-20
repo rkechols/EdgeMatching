@@ -276,7 +276,7 @@ class PTSolver:
 		self.buddy_matrix = np.empty((self.n, 4), dtype=tuple)
 		self.preference_pool: List[PoolCandidate] = list()  # max heap of PoolCandidates
 		self.patches_placed: Set[int] = set()
-		self.reconstruction_matrix = np.zeros((3, 3, 2), dtype=np.int)
+		self.reconstruction_matrix = np.full((3, 3, 2), -1)
 		self.construction_matrix = np.array([
 			[NO_PIECE, EXPANSION_SPACE, NO_PIECE],
 			[EXPANSION_SPACE, YES_PIECE, EXPANSION_SPACE],
@@ -633,7 +633,7 @@ class PTSolver:
 		self.construction_matrix[row, col] = YES_PIECE
 		# resize reconstruction and construction matrices
 		if row == 0 or row == self.construction_matrix.shape[0] - 1:
-			new_scores_row = np.zeros((1, self.reconstruction_matrix.shape[1], 2), dtype=int)
+			new_scores_row = np.full((1, self.reconstruction_matrix.shape[1], 2), -1)
 			new_construction_row = np.empty((1, self.construction_matrix.shape[1]), dtype=int)
 			new_construction_row[:, :] = NO_PIECE
 			if row == 0:  # we placed one on the top row
@@ -646,7 +646,7 @@ class PTSolver:
 				self.reconstruction_matrix = np.concatenate((self.reconstruction_matrix, new_scores_row), axis=0)
 				self.construction_matrix = np.concatenate((self.construction_matrix, new_construction_row), axis=0)
 		if col == 0 or col == self.construction_matrix.shape[1] - 1:
-			new_scores_col = np.zeros((self.reconstruction_matrix.shape[0], 1, 2), dtype=int)
+			new_scores_col = np.full((self.reconstruction_matrix.shape[0], 1, 2), -1)
 			new_construction_col = np.empty((self.construction_matrix.shape[0], 1), dtype=int)
 			new_construction_col[:, :] = NO_PIECE
 			if col == 0:  # we placed one on the left column
