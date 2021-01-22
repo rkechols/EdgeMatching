@@ -6,7 +6,8 @@ from typing import List, Set, Tuple
 import numpy as np
 from constants import INFINITY, NO_PIECE, EXPANSION_SPACE, YES_PIECE, ROTATION_0, ROTATION_180, ROTATION_90, ROTATION_270
 from tqdm import tqdm
-from functions import rgb_to_lab, rgb2lab
+from functions import rgb_to_lab, rgb2lab, assemble_image, show_image
+import copy
 
 
 def predict_3rd_pixel(col1: np.ndarray, col2: np.ndarray, use_lab_color: bool) -> np.ndarray:
@@ -247,6 +248,7 @@ class PoolCandidate:
 class PTSolver:
 	def __init__(self, patches: List[np.ndarray], rotations_shuffled: bool = True, use_lab_color: bool = True):
 		self.n = len(patches)
+		self.orig_patches = copy.deepcopy(patches)
 		self.patches = patches
 		self.rotations_shuffled = rotations_shuffled
 		self.use_lab_color = use_lab_color
@@ -675,9 +677,16 @@ class PTSolver:
 		# construction_matrix needs to then be updated and reconstruction_matrix may need to have size updated
 		# if the preference_pool is empty, we have to re score best buddy matrix and exclude pieces that have already been placed
 		# continue the process until all pieces have been placed
+		counter = 0  # to print image as it's assembled
 		pieces_remaining = self.n
 		with tqdm(total=self.n) as progress:
 			self.reconstruction_matrix[1, 1] = [first_piece, 0]  # Add the first piece, 0 refers to the rotation
+
+			# to print image as it's assembled
+			reconstructed_image = assemble_image(self.orig_patches, self.reconstruction_matrix)
+			show_image(reconstructed_image, "added a piece" + str(counter))
+			counter += 1
+
 			self.block_dissimilarity_scores(1, 1, first_piece)
 			self.patches_placed.add(first_piece)
 			pieces_remaining -= 1
@@ -721,6 +730,12 @@ class PTSolver:
 					self.block_dissimilarity_scores(next_piece.row, next_piece.col, next_piece.index)
 					self.patches_placed.add(next_piece.index)
 					pieces_remaining -= 1
+
+					# to print image as it's assembled
+					reconstructed_image = assemble_image(self.orig_patches, self.reconstruction_matrix)
+					show_image(reconstructed_image, "added a piece" + str(counter))
+					counter += 1
+
 					# we already removed the piece using `heapq.heappop`
 					self.add_buddies_to_pool(next_piece.index, next_piece.row, next_piece.col, True, True, best_neighbors)
 					if pieces_remaining < self.n / 2:

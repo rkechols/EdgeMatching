@@ -125,8 +125,8 @@ if __name__ == "__main__":
 		show_image(reconstructed_image, "final answer")
 		accuracy, location_accuracy, relative_accuracy = verify_accuracy(reconstruction_matrix, shuffle_dictionary, dimensions)
 		show_image(reconstructed_image, "final answer")
-		print(f"Absolute accuracy: {accuracy * 100}%")
-		print(f"with {location_accuracy * 100}% in the correct position")
-		print(f"Relative accuracy: {relative_accuracy * 100}%")
+		print(f"Absolute accuracy: {round(accuracy * 100, 3)}%")
+		print(f"with {round(location_accuracy * 100, 3)}% in the correct position")
+		print(f"Relative accuracy: {round(relative_accuracy * 100, 3)}%")
 	else:
 		print("reconstructed_image is None")
