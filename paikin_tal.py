@@ -462,7 +462,7 @@ class PTSolver:
 					clockwise_of_next = self.reconstruction_matrix[neighbor_row + 1, neighbor_col]
 					counter_clockwise_of_next = self.reconstruction_matrix[neighbor_row - 1, neighbor_col]
 
-				elif r == ROTATION_90:  # UP
+				elif r == ROTATION_270:  # UP
 					neighbor_col = placed_col  # col
 					neighbor_row = placed_row - 1  # row
 					dir_a[0] = 3  # right
@@ -480,7 +480,7 @@ class PTSolver:
 					clockwise_of_next = self.reconstruction_matrix[neighbor_row - 1, neighbor_col]
 					counter_clockwise_of_next = self.reconstruction_matrix[neighbor_row + 1, neighbor_col]
 
-				elif r == ROTATION_270:  # DOWN
+				elif r == ROTATION_90:  # DOWN
 					neighbor_col = placed_col
 					neighbor_row = placed_row + 1
 					dir_a[0] = 2  # left
@@ -705,11 +705,11 @@ class PTSolver:
 					can_add_piece = False
 					if next_piece.row > 0 and self.construction_matrix[next_piece.row - 1, next_piece.col] == YES_PIECE:
 						neighbor_up = self.reconstruction_matrix[next_piece.row - 1, next_piece.col, 0]
-						if best_neighbors[neighbor_up, ROTATION_270] == next_piece.index and best_neighbors[next_piece.index, ROTATION_90] == neighbor_up:
+						if best_neighbors[neighbor_up, ROTATION_90] == next_piece.index and best_neighbors[next_piece.index, ROTATION_270] == neighbor_up:
 							can_add_piece = True
 					if next_piece.row < self.construction_matrix.shape[0] - 1 and self.construction_matrix[next_piece.row + 1, next_piece.col] == YES_PIECE:
 						neighbor_down = self.reconstruction_matrix[next_piece.row + 1, next_piece.col, 0]
-						if best_neighbors[neighbor_down, ROTATION_90] == next_piece.index and best_neighbors[next_piece.index, ROTATION_270] == neighbor_down:
+						if best_neighbors[neighbor_down, ROTATION_270] == next_piece.index and best_neighbors[next_piece.index, ROTATION_90] == neighbor_down:
 							can_add_piece = True
 					if next_piece.col > 0 and self.construction_matrix[next_piece.row, next_piece.col - 1] == YES_PIECE:
 						neighbor_left = self.reconstruction_matrix[next_piece.row, next_piece.col - 1, 0]
