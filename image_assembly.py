@@ -99,16 +99,16 @@ def compare_images(image1: np.ndarray, image2: np.ndarray):
 
 
 if __name__ == "__main__":
-	original_image = load_image_from_disk("TestImages/Giraffe.jpg")
+	original_image = load_image_from_disk("TestImages/a3.png")
 	show_image(original_image, "original")
 	# ps = original_image.shape[0] // 6
 	ps = 28
 	rotations = False
 	original_patched, dimensions = patch_image(original_image, ps)
 
-	# patch_list, shuffle_dictionary = scramble_image(original_patched, seed=4, rotation_shuffle=rotations)
-	patch_list = original_patched  # no shuffling
-	shuffle_dictionary = { i: (i, 0) for i in range(len(patch_list)) }
+	patch_list, shuffle_dictionary = scramble_image(original_patched, seed=4, rotation_shuffle=rotations)
+	# patch_list = original_patched  # no shuffling
+	# shuffle_dictionary = { i: (i, 0) for i in range(len(patch_list)) }
 
 	show_image(assemble_patches(patch_list, original_image.shape[1] // ps), "scrambled")
 	# hypothetical_min = 85 + (15.038 * math.log(ps))

@@ -291,73 +291,73 @@ def assemble_image(patches: list, construction_matrix: np.ndarray) -> Union[None
 
 
 def rgb_to_lab(rgb_image: np.ndarray) -> np.ndarray:
+    print("does this function ('rgb_to_lab') actually work?")
     return cv2.cvtColor(rgb_image, cv2.COLOR_RGB2LAB)
-
 
 
 def lab_to_rgb(lab_image: np.ndarray) -> np.ndarray:
     return cv2.cvtColor(lab_image, cv2.COLOR_LAB2RGB)
 
 
-def rgb2lab(R, G, B):
+def rgb2lab(r_original, g_original, b_original):
     eps = 216 / 24389
     k = 24389 / 27
 
-    Xr = 0.964221  # reference white D50
-    Yr = 1.0
-    Zr = 0.825211
+    xr = 0.964221  # reference white D50
+    yr = 1.0
+    zr = 0.825211
 
     # RGB to XYZ
-    r = R / 255  # R 0..1
-    g = G / 255  # G 0..1
-    b = B / 255  # B 0..1
+    r = r_original / 255  # R 0..1
+    g = g_original / 255  # G 0..1
+    b = b_original / 255  # B 0..1
 
     # assuming sRGB (D65)
-    if (r <= 0.04045):
+    if r <= 0.04045:
         r = r / 12
     else:
-        r = (float)(math.pow((r + 0.055) / 1.055, 2.4))
+        r = float(math.pow((r + 0.055) / 1.055, 2.4))
 
-    if (g <= 0.04045):
+    if g <= 0.04045:
         g = g / 12
     else:
-        g = (float)(math.pow((g + 0.055) / 1.055, 2.4))
+        g = float(math.pow((g + 0.055) / 1.055, 2.4))
 
-    if (b <= 0.04045):
+    if b <= 0.04045:
         b = b / 12
     else:
-        b = (float)(math.pow((b + 0.055) / 1.055, 2.4))
+        b = float(math.pow((b + 0.055) / 1.055, 2.4))
 
-    X = (float)(0.436052025 * r + 0.385081593 * g + 0.143087414 * b)
-    Y = (float)(0.222491598 * r + 0.71688606 * g + 0.060621486 * b)
-    Z = (float)(0.013929122 * r + 0.097097002 * g + 0.71418547 * b)
+    x = float(0.436052025 * r + 0.385081593 * g + 0.143087414 * b)
+    y = float(0.222491598 * r + 0.71688606 * g + 0.060621486 * b)
+    z = float(0.013929122 * r + 0.097097002 * g + 0.71418547 * b)
 
     # XYZ to Lab
-    xr = X / Xr
-    yr = Y / Yr
-    zr = Z / Zr
+    xr = x / xr
+    yr = y / yr
+    zr = z / zr
 
-    if (xr > eps):
-        fx = (float)(math.pow(xr, 1 / 3.))
+    if xr > eps:
+        fx = float(math.pow(xr, 1 / 3.))
     else:
-        fx = (float)((k * xr + 16.) / 116.)
+        fx = float((k * xr + 16.) / 116.)
 
-    if (yr > eps):
-        fy = (float)(math.pow(yr, 1 / 3.))
+    if yr > eps:
+        fy = float(math.pow(yr, 1 / 3.))
     else:
-        fy = (float)((k * yr + 16.) / 116.)
+        fy = float((k * yr + 16.) / 116.)
 
-    if (zr > eps):
-        fz = (float)(math.pow(zr, 1 / 3.))
+    if zr > eps:
+        fz = float(math.pow(zr, 1 / 3.))
     else:
-        fz = (float)((k * zr + 16.) / 116)
+        fz = float((k * zr + 16.) / 116)
 
-    Ls = (116 * fy) - 16
-    As = 500 * (fx - fy)
-    bs = 200 * (fy - fz)
+    l_s = (116 * fy) - 16
+    a_s = 500 * (fx - fy)
+    b_s = 200 * (fy - fz)
 
     lab = np.zeros(3)
-    lab[0] = ((2.55 * Ls + .5) / 255.0 * 100.0)  # *65280
-    lab[1] = (((As + .5) + 128) / 255.0 * 255.0)  # *65280
-    lab[2] = (((bs + .5) + 128) / 255.0 * 255.0)  # *65280
+    lab[0] = ((2.55 * l_s + .5) / 255.0 * 100.0)  # *65280
+    lab[1] = (((a_s + .5) + 128) / 255.0 * 255.0)  # *65280
+    lab[2] = (((b_s + .5) + 128) / 255.0 * 255.0)  # *65280
     return lab

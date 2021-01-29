@@ -6,7 +6,7 @@ from typing import List, Set, Tuple
 import numpy as np
 from constants import INFINITY, NO_PIECE, EXPANSION_SPACE, YES_PIECE, ROTATION_0, ROTATION_180, ROTATION_90, ROTATION_270
 from tqdm import tqdm
-from functions import rgb_to_lab, rgb2lab, assemble_image, show_image
+from functions import rgb2lab, assemble_image, show_image
 import copy
 
 
@@ -253,7 +253,7 @@ class PTSolver:
 		self.rotations_shuffled = rotations_shuffled
 		self.use_lab_color = use_lab_color
 		if self.use_lab_color:
-			#self.patches = [rgb_to_lab(p) for p in self.patches]
+			# self.patches = [rgb_to_lab(p) for p in self.patches]
 			for i in range(len(self.patches)):
 				for j in range(self.patches[i].shape[0]):
 					for k in range(self.patches[i].shape[1]):
@@ -264,8 +264,6 @@ class PTSolver:
 						self.patches[i][j][k][0] = lab[0]
 						self.patches[i][j][k][1] = lab[1]
 						self.patches[i][j][k][2] = lab[2]
-
-
 
 		self.prediction_matrix = np.empty((self.n, 4), dtype=np.ndarray)
 		self.average_edge_colors = np.empty((self.n, 4, 3), dtype=np.float)  # 4 edges, 3 channels
@@ -538,7 +536,7 @@ class PTSolver:
 				sum_mutual_compatibility = 0  # aggregates a compatibility of potential neighbors
 				num_placed_neighbors_of_next = 0  # counts how many neighbors it would have if placed
 				if neighbor_row > 0 and self.construction_matrix[neighbor_row - 1, neighbor_col] == YES_PIECE:  # if there is a piece above nextA
-					#sum_mutual_compatibility += (w1 * self.compatibility_scores[1, self.construction_matrix[neighbor_row - 1, neighbor_col] - 1][neighbor]) + (w2 * self.compatibility_scores[0, neighbor, self.construction_matrix[neighbor_row - 1, neighbor_col] - 1])
+					# sum_mutual_compatibility += (w1 * self.compatibility_scores[1, self.construction_matrix[neighbor_row - 1, neighbor_col] - 1][neighbor]) + (w2 * self.compatibility_scores[0, neighbor, self.construction_matrix[neighbor_row - 1, neighbor_col] - 1])
 					sum_mutual_compatibility += (w1 * self.compatibility_scores[self.reconstruction_matrix[neighbor_row - 1, neighbor_col, 0], ROTATION_270, neighbor]) \
 												+ (w2 * self.compatibility_scores[neighbor, ROTATION_90, self.reconstruction_matrix[neighbor_row - 1, neighbor_col, 0]])
 
@@ -546,19 +544,19 @@ class PTSolver:
 					num_placed_neighbors_of_next += 1
 
 				if neighbor_row < self.construction_matrix.shape[0] - 1 and self.construction_matrix[neighbor_row + 1, neighbor_col] == YES_PIECE:
-					#sum_mutual_compatibility += (w1 * self.compatibility_scores[0, self.construction_matrix[neighbor_row + 1, neighbor_col] - 1][neighbor]) + (w2 * self.compatibility_scores[1, neighbor, self.construction_matrix[neighbor_row + 1, neighbor_col] - 1])
+					# sum_mutual_compatibility += (w1 * self.compatibility_scores[0, self.construction_matrix[neighbor_row + 1, neighbor_col] - 1][neighbor]) + (w2 * self.compatibility_scores[1, neighbor, self.construction_matrix[neighbor_row + 1, neighbor_col] - 1])
 					sum_mutual_compatibility += (w1 * self.compatibility_scores[self.reconstruction_matrix[neighbor_row + 1, neighbor_col, 0] - 1, ROTATION_90, neighbor]) \
 												+ (w2 * self.compatibility_scores[neighbor, ROTATION_270, self.reconstruction_matrix[neighbor_row + 1, neighbor_col, 0]])
 					num_placed_neighbors_of_next += 1
 
 				if neighbor_col > 0 and self.construction_matrix[neighbor_row, neighbor_col - 1] == YES_PIECE:
-					#sum_mutual_compatibility += (w1 * self.compatibility_scores[3, self.construction_matrix[neighbor_row, neighbor_col - 1] - 1][neighbor]) + (w2 * self.compatibility_scores[2, neighbor, self.construction_matrix[neighbor_row, neighbor_col - 1] - 1])
+					# sum_mutual_compatibility += (w1 * self.compatibility_scores[3, self.construction_matrix[neighbor_row, neighbor_col - 1] - 1][neighbor]) + (w2 * self.compatibility_scores[2, neighbor, self.construction_matrix[neighbor_row, neighbor_col - 1] - 1])
 					sum_mutual_compatibility += (w1 * self.compatibility_scores[self.reconstruction_matrix[neighbor_row, neighbor_col - 1, 0], ROTATION_0, neighbor]) \
 												+ (w2 * self.compatibility_scores[neighbor, ROTATION_180, self.reconstruction_matrix[neighbor_row, neighbor_col - 1, 0]])
 					num_placed_neighbors_of_next += 1
 
 				if neighbor_col < self.construction_matrix.shape[1] - 1 and self.construction_matrix[neighbor_row, neighbor_col + 1] == YES_PIECE:
-					#sum_mutual_compatibility += (w1 * self.compatibility_scores[2, self.construction_matrix[neighbor_row, neighbor_col + 1] - 1][neighbor]) + (w2 * self.compatibility_scores[3, neighbor, self.construction_matrix[neighbor_row, neighbor_col + 1] - 1])
+					# sum_mutual_compatibility += (w1 * self.compatibility_scores[2, self.construction_matrix[neighbor_row, neighbor_col + 1] - 1][neighbor]) + (w2 * self.compatibility_scores[3, neighbor, self.construction_matrix[neighbor_row, neighbor_col + 1] - 1])
 					sum_mutual_compatibility += (w1 * self.compatibility_scores[self.reconstruction_matrix[neighbor_row, neighbor_col + 1, 0], ROTATION_180, neighbor])\
 												+ (w2 * self.compatibility_scores[neighbor, ROTATION_0, self.reconstruction_matrix[neighbor_row, neighbor_col + 1, 0]])
 					num_placed_neighbors_of_next += 1
@@ -609,15 +607,27 @@ class PTSolver:
 		if self.construction_matrix[row, col + 1] == YES_PIECE:
 			self.dissimilarity_scores[placed_patch, ROTATION_0, :] = INFINITY
 			self.dissimilarity_scores[:, ROTATION_180, placed_patch] = INFINITY
+			neighbor_patch = self.reconstruction_matrix[row, col + 1, 0]
+			self.dissimilarity_scores[neighbor_patch, ROTATION_180, :] = INFINITY
+			self.dissimilarity_scores[:, ROTATION_0, neighbor_patch] = INFINITY
 		if self.construction_matrix[row, col - 1] == YES_PIECE:
 			self.dissimilarity_scores[placed_patch, ROTATION_180, :] = INFINITY
 			self.dissimilarity_scores[:, ROTATION_0, placed_patch] = INFINITY
+			neighbor_patch = self.reconstruction_matrix[row, col - 1, 0]
+			self.dissimilarity_scores[neighbor_patch, ROTATION_0, :] = INFINITY
+			self.dissimilarity_scores[:, ROTATION_180, neighbor_patch] = INFINITY
 		if self.construction_matrix[row + 1, col] == YES_PIECE:
 			self.dissimilarity_scores[placed_patch, ROTATION_90, :] = INFINITY
 			self.dissimilarity_scores[:, ROTATION_270, placed_patch] = INFINITY
+			neighbor_patch = self.reconstruction_matrix[row + 1, col, 0]
+			self.dissimilarity_scores[neighbor_patch, ROTATION_270, :] = INFINITY
+			self.dissimilarity_scores[:, ROTATION_90, neighbor_patch] = INFINITY
 		if self.construction_matrix[row - 1, col] == YES_PIECE:
 			self.dissimilarity_scores[placed_patch, ROTATION_270, :] = INFINITY
 			self.dissimilarity_scores[:, ROTATION_90, placed_patch] = INFINITY
+			neighbor_patch = self.reconstruction_matrix[row - 1, col, 0]
+			self.dissimilarity_scores[neighbor_patch, ROTATION_90, :] = INFINITY
+			self.dissimilarity_scores[:, ROTATION_270, neighbor_patch] = INFINITY
 
 		for i in self.patches_placed:
 			self.dissimilarity_scores[i, :, placed_patch] = INFINITY
@@ -733,7 +743,7 @@ class PTSolver:
 
 					# to print image as it's assembled
 					reconstructed_image = assemble_image(self.orig_patches, self.reconstruction_matrix)
-					show_image(reconstructed_image, "added a piece" + str(counter))
+					show_image(reconstructed_image, "added a piece: " + str(counter))
 					counter += 1
 
 					# we already removed the piece using `heapq.heappop`
