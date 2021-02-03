@@ -110,12 +110,16 @@ def relative_accuracy(correct, reconstructed):
     num_cols = correct.shape[1]
     num_edges_total = correct.shape[0] * correct.shape[1] * 4
     good_rotations = [0] * 4
+    count_not_found = 0
 
     for i in range(num_rows):
         for j in range(num_cols): # for each square in correct
             index_correct = correct[i][j][0]
             row_recon, col_recon = find_index_match(index_correct, reconstructed) # find coordinates in reconstruction matrix that matches this value
-
+            if row_recon == "not found":
+                count_not_found += 1
+                print("Piece not found count ", count_not_found)
+                continue
             rotated_reconstructed = reconstructed.copy()
             rotation_difference = (correct[i][j][1] - rotated_reconstructed[row_recon][col_recon][1]) % 4
             if rotation_difference != 0:
@@ -167,4 +171,4 @@ def find_index_match(value_to_find, matrix):
         for col in range(matrix.shape[1]):
             if matrix[row][col][0] == value_to_find:
                 return row, col
-    return "not found"
+    return "not found", 0

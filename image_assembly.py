@@ -106,7 +106,7 @@ if __name__ == "__main__":
 	rotations = False
 	original_patched, dimensions = patch_image(original_image, ps)
 
-	patch_list, shuffle_dictionary = scramble_image(original_patched, seed=4, rotation_shuffle=rotations)
+	patch_list, shuffle_dictionary = scramble_image(original_patched, seed=5, rotation_shuffle=rotations)
 	# patch_list = original_patched  # no shuffling
 	# shuffle_dictionary = { i: (i, 0) for i in range(len(patch_list)) }
 

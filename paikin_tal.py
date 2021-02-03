@@ -702,7 +702,7 @@ class PTSolver:
 			pieces_remaining -= 1
 			self.add_buddies_to_pool(first_piece, 1, 1, True, True, best_neighbors)
 			progress.update()
-
+			prev_pieces_remaining = pieces_remaining
 			while pieces_remaining > 0:
 				if len(self.preference_pool) > 0:
 					# get next piece from the preference pool
@@ -753,6 +753,11 @@ class PTSolver:
 					progress.update()
 
 				else:  # preference_pool is empty
+					if prev_pieces_remaining == pieces_remaining:
+						print("COULDN'T PLACE ANY PIECES-- BREAKING")
+						break
+					else:
+						prev_pieces_remaining = pieces_remaining
 					best_neighbors_dissimilarity = get_best_neighbors(self.dissimilarity_scores, self.rotations_shuffled)
 					self.get_compatibility_scores(best_neighbors_dissimilarity)
 					best_neighbors = get_best_neighbors(self.compatibility_scores, self.rotations_shuffled, for_min=False)
