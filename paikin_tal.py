@@ -145,14 +145,20 @@ def get_best_neighbors(scores_matrix: np.ndarray, rotations_shuffled: bool = Tru
 					best_score = np.where(relevant_section == np.amin(relevant_section))
 				else:
 					best_score = np.where(relevant_section == np.amax(relevant_section))
-				best_neighbors[i, r1] = list(zip(*best_score))[0]  # just take the first if there's a tie
+				options = list(zip(*best_score))
+				if len(options) > 1:
+					print("FOUND TIE in 'get_best_neighbors'")
+				best_neighbors[i, r1] = options[0]  # just take the first if there's a tie
 			else:
 				relevant_section = scores_matrix[i, r1, :]
 				if for_min:
 					best_score = np.where(relevant_section == np.amin(relevant_section))
 				else:
 					best_score = np.where(relevant_section == np.amax(relevant_section))
-				best_neighbors[i, r1] = best_score[0][0]  # just take the first if there's a tie
+				options = best_score[0]
+				if len(options) > 1:
+					print("FOUND TIE in 'get_best_neighbors'")
+				best_neighbors[i, r1] = options[0]  # just take the first if there's a tie
 	return best_neighbors
 
 
@@ -354,9 +360,12 @@ class PTSolver:
 						best_compatibility_back = list(zip(*best_compatibility_back))
 						for back_i, back_r1 in best_compatibility_back:
 							if i == back_i and r1_inverse == back_r1:
-								self.buddy_matrix[i, r1] = (j, r2)
-								found_buddy = True
-								break
+								if found_buddy:
+									print("TIE FOUND in 'get_best_buddies'")
+								else:
+									self.buddy_matrix[i, r1] = (j, r2)
+									found_buddy = True
+									# break
 						if found_buddy:
 							break
 					if not found_buddy:  # this one has no best buddy :(
@@ -374,9 +383,12 @@ class PTSolver:
 						best_compatibility_back = best_compatibility_back[0]
 						for back_i in best_compatibility_back:
 							if i == back_i:
-								self.buddy_matrix[i, r1] = j
-								found_buddy = True
-								break
+								if found_buddy:
+									print("TIE FOUND in 'get_best_buddies'")
+								else:
+									self.buddy_matrix[i, r1] = j
+									found_buddy = True
+									# break
 						if found_buddy:
 							break
 					if not found_buddy:  # this one has no best buddy :(
