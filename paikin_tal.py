@@ -1,13 +1,15 @@
 # based on the paper by Genady Paikin and Ayellet Tal, found at http://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=7299116
 
 import heapq
-import multiprocessing as mp
 from typing import List, Set, Tuple
 import numpy as np
 from constants import INFINITY, NO_PIECE, EXPANSION_SPACE, YES_PIECE, ROTATION_0, ROTATION_180, ROTATION_90, ROTATION_270
 from tqdm import tqdm
 from functions import rgb2lab, assemble_image, show_image
 import copy
+
+
+SHOW_EVERY_PLACEMENT = False
 
 
 def predict_3rd_pixel(col1: np.ndarray, col2: np.ndarray, use_lab_color: bool) -> np.ndarray:
@@ -33,23 +35,6 @@ def predict_3rd_pixel(col1: np.ndarray, col2: np.ndarray, use_lab_color: bool) -
 def predict_3rd_pixel_mp(coord_last_columns: (Tuple[int, int], np.ndarray, np.ndarray, bool)) -> (Tuple[int, int], np.ndarray):
 	coord, col1, col2, use_lab_color = coord_last_columns
 	return coord, predict_3rd_pixel(col1, col2, use_lab_color)
-
-
-# generates input for predict_3rd_pixel_mp()
-class Predict3rdPixelMpGenerator:
-	def __init__(self, patches: List[np.ndarray], use_lab_color: bool):
-		self.patches = patches
-		self.use_lab_color = use_lab_color
-
-	def __iter__(self):
-		for patch_index, patch in enumerate(self.patches):
-			for r in range(4):
-				patch_rotated = np.rot90(patch, r)
-				yield (patch_index, r), patch_rotated[:, -2, :], patch_rotated[:, -1, :], self.use_lab_color
-
-	def __len__(self):
-		n = len(self.patches)
-		return n * 4
 
 
 def norm_l1(col1: np.ndarray, col2: np.ndarray) -> float:
@@ -88,39 +73,6 @@ def norm_l1_mp(coord_and_columns: (Tuple[int, int, int], np.ndarray, np.ndarray,
 		else:
 			score = norm_l1(predicted, actual)
 	return t, score
-
-
-# generates input for dissimilarity_score_pt_mp()
-class DissimilarityScorePtMpGenerator:
-	def __init__(self, patches: List[np.ndarray], predictions_matrix: np.ndarray, average_color_matrix: np.ndarray, rotations_shuffled: bool = True):
-		self.patches = patches
-		self.predictions = predictions_matrix
-		self.colors = average_color_matrix
-		self.rotations_shuffled = rotations_shuffled
-
-	def __iter__(self):
-		for patch1_index, patch1 in enumerate(self.patches):
-			for r1 in range(4):
-				predicted_column = self.predictions[patch1_index, r1]
-				color1 = self.colors[patch1_index, r1]
-				for patch2_index, patch2 in enumerate(self.patches):
-					if self.rotations_shuffled:
-						for r2 in range(4):
-							patch2_rotated = np.rot90(patch2, r2)
-							actual_column = patch2_rotated[:, 0, :]
-							color2 = self.colors[patch2_index, r2]
-							yield (patch1_index, r1, patch2_index, r2), predicted_column, actual_column, color1, color2
-					else:
-						r2 = (r1 + 2) % 4
-						color2 = self.colors[patch2_index, r2]
-						yield (patch1_index, r1, patch2_index), predicted_column, np.rot90(patch2, r1)[:, 0, :], color1, color2
-
-	def __len__(self):
-		n = len(self.patches)
-		if self.rotations_shuffled:
-			return n * 4 * n * 4
-		else:
-			return n * 4 * n
 
 
 def get_best_neighbors(scores_matrix: np.ndarray, rotations_shuffled: bool = True, for_min: bool = True) -> np.ndarray:
@@ -221,23 +173,6 @@ def compatibility_score_mp(coord_and_dissimilarities: (Tuple[int, int], np.ndarr
 	return (patch_index, r), compatibility_scores
 
 
-# generates input for compatibility_score_mp()
-class CompatibilityScoreMpGenerator:
-	def __init__(self, dissimilarity_scores: np.ndarray, best_neighbors_dissimilarity: np.ndarray, rotations_shuffled: bool = True):
-		self.n = dissimilarity_scores.shape[0]
-		self.d = dissimilarity_scores
-		self.b = best_neighbors_dissimilarity
-		self.rotations_shuffled = rotations_shuffled
-
-	def __iter__(self):
-		for patch_index in range(self.n):
-			for r in range(4):
-				yield (patch_index, r), self.d, self.b, self.rotations_shuffled
-
-	def __len__(self):
-		return self.n * 4
-
-
 class PoolCandidate:
 	def __init__(self, score: float, index: int, row: int, col: int):
 		self.score = score
@@ -290,13 +225,12 @@ class PTSolver:
 		])
 
 	def get_3rd_pixel_predictions(self):
-		with mp.Pool() as pool:
-			gen = Predict3rdPixelMpGenerator(self.patches, self.use_lab_color)
-			result_generator = pool.imap_unordered(predict_3rd_pixel_mp, gen)
-			with tqdm(total=len(gen)) as progress_bar:
-				for (patch_index, r), predicted_column in result_generator:
-					self.prediction_matrix[patch_index, r] = predicted_column
-					progress_bar.update()
+		for patch_index, patch in enumerate(self.patches):
+			for r in range(4):
+				patch_rotated = np.rot90(patch, r)
+				in_tuple = (patch_index, r), patch_rotated[:, -2, :], patch_rotated[:, -1, :], self.use_lab_color
+				(patch_index, r), predicted_column = predict_3rd_pixel_mp(in_tuple)
+				self.prediction_matrix[patch_index, r] = predicted_column
 
 	def get_average_edge_colors(self):
 		for i, patch in enumerate(self.patches):
@@ -307,39 +241,39 @@ class PTSolver:
 
 	def get_dissimilarity_scores(self):
 		if self.rotations_shuffled:
-			with mp.Pool() as pool:
-				gen = DissimilarityScorePtMpGenerator(self.patches, self.prediction_matrix, self.average_edge_colors, self.rotations_shuffled)
-				result_generator = pool.imap_unordered(norm_l1_mp, gen)
-				with tqdm(total=len(gen)) as progress_bar:
-					for (patch1_index, r1, patch2_index, r2), score in result_generator:
-						self.dissimilarity_scores[patch1_index, r1, patch2_index, r2] = score
-						progress_bar.update()
+			for patch1_index, patch1 in enumerate(self.patches):
+				for r1 in range(4):
+					predicted_column = self.prediction_matrix[patch1_index, r1]
+					color1 = self.average_edge_colors[patch1_index, r1]
+					for patch2_index, patch2 in enumerate(self.patches):
+						for r2 in range(4):
+							patch2_rotated = np.rot90(patch2, r2)
+							actual_column = patch2_rotated[:, 0, :]
+							color2 = self.average_edge_colors[patch2_index, r2]
+							tuple_in = (patch1_index, r1, patch2_index, r2), predicted_column, actual_column, color1, color2
+							(patch1_index, r1, patch2_index, r2), score = norm_l1_mp(tuple_in)
+							self.dissimilarity_scores[patch1_index, r1, patch2_index, r2] = score
 		else:
-			with mp.Pool() as pool:
-				gen = DissimilarityScorePtMpGenerator(self.patches, self.prediction_matrix, self.average_edge_colors, self.rotations_shuffled)
-				result_generator = pool.imap_unordered(norm_l1_mp, gen)
-				with tqdm(total=len(gen)) as progress_bar:
-					for (patch1_index, r1, patch2_index), score in result_generator:
+			for patch1_index, patch1 in enumerate(self.patches):
+				for r1 in range(4):
+					predicted_column = self.prediction_matrix[patch1_index, r1]
+					color1 = self.average_edge_colors[patch1_index, r1]
+					for patch2_index, patch2 in enumerate(self.patches):
+						r2 = (r1 + 2) % 4
+						color2 = self.average_edge_colors[patch2_index, r2]
+						tuple_in = (patch1_index, r1, patch2_index), predicted_column, np.rot90(patch2, r1)[:, 0, :], color1, color2
+						(patch1_index, r1, patch2_index), score = norm_l1_mp(tuple_in)
 						self.dissimilarity_scores[patch1_index, r1, patch2_index] = score
-						progress_bar.update()
 
 	def get_compatibility_scores(self, best_neighbors_dissimilarity: np.ndarray):
-		if self.rotations_shuffled:
-			with mp.Pool() as pool:
-				gen = CompatibilityScoreMpGenerator(self.dissimilarity_scores, best_neighbors_dissimilarity, self.rotations_shuffled)
-				result_generator = pool.imap_unordered(compatibility_score_mp, gen)
-				with tqdm(total=len(gen)) as progress_bar:
-					for (patch1_index, r1), scores_section in result_generator:
-						self.compatibility_scores[patch1_index, r1, :, :] = scores_section
-						progress_bar.update()
-		else:
-			with mp.Pool() as pool:
-				gen = CompatibilityScoreMpGenerator(self.dissimilarity_scores, best_neighbors_dissimilarity, self.rotations_shuffled)
-				result_generator = pool.imap_unordered(compatibility_score_mp, gen)
-				with tqdm(total=len(gen)) as progress_bar:
-					for (patch1_index, r1), scores_section in result_generator:
-						self.compatibility_scores[patch1_index, r1, :] = scores_section
-						progress_bar.update()
+		for patch_index in range(self.n):
+			for r in range(4):
+				tuple_in = (patch_index, r), self.dissimilarity_scores, best_neighbors_dissimilarity, self.rotations_shuffled
+				(patch1_index, r1), scores_section = compatibility_score_mp(tuple_in)
+				if self.rotations_shuffled:
+					self.compatibility_scores[patch1_index, r1, :, :] = scores_section
+				else:
+					self.compatibility_scores[patch1_index, r1, :] = scores_section
 
 	def get_best_buddies(self):
 		# look at each piece in each rotation, see if its best neighbor is mutual
@@ -361,7 +295,7 @@ class PTSolver:
 						for back_i, back_r1 in best_compatibility_back:
 							if i == back_i and r1_inverse == back_r1:
 								if found_buddy:
-									print("TIE FOUND in 'get_best_buddies'")
+									print("FOUND TIE in 'get_best_buddies'")
 								else:
 									self.buddy_matrix[i, r1] = (j, r2)
 									found_buddy = True
@@ -384,7 +318,7 @@ class PTSolver:
 						for back_i in best_compatibility_back:
 							if i == back_i:
 								if found_buddy:
-									print("TIE FOUND in 'get_best_buddies'")
+									print("FOUND TIE in 'get_best_buddies'")
 								else:
 									self.buddy_matrix[i, r1] = j
 									found_buddy = True
@@ -705,8 +639,9 @@ class PTSolver:
 			self.reconstruction_matrix[1, 1] = [first_piece, 0]  # Add the first piece, 0 refers to the rotation
 
 			# to print image as it's assembled
-			reconstructed_image = assemble_image(self.orig_patches, self.reconstruction_matrix)
-			show_image(reconstructed_image, "added a piece" + str(counter))
+			if SHOW_EVERY_PLACEMENT:
+				reconstructed_image = assemble_image(self.orig_patches, self.reconstruction_matrix)
+				show_image(reconstructed_image, "added a piece: " + str(counter))
 			counter += 1
 
 			self.block_dissimilarity_scores(1, 1, first_piece)
@@ -754,8 +689,9 @@ class PTSolver:
 					pieces_remaining -= 1
 
 					# to print image as it's assembled
-					reconstructed_image = assemble_image(self.orig_patches, self.reconstruction_matrix)
-					show_image(reconstructed_image, "added a piece: " + str(counter))
+					if SHOW_EVERY_PLACEMENT:
+						reconstructed_image = assemble_image(self.orig_patches, self.reconstruction_matrix)
+						show_image(reconstructed_image, "added a piece: " + str(counter))
 					counter += 1
 
 					# we already removed the piece using `heapq.heappop`
