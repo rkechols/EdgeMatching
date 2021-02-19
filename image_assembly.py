@@ -106,7 +106,10 @@ if __name__ == "__main__":
 	rotations = False
 	original_patched, dimensions = patch_image(original_image, ps)
 
-	patch_list, shuffle_dictionary = scramble_image(original_patched, seed=5, rotation_shuffle=rotations)
+	patch_list, shuffle_dictionary = scramble_image(original_patched, seed=8, rotation_shuffle=rotations)
+	# with open("SHUFFLE_EXPORT.txt", "w", encoding="utf-8") as shuff:
+	# 	for i in range(len(patch_list)):
+	# 		print(shuffle_dictionary[i][0], file=shuff)
 	# patch_list = original_patched  # no shuffling
 	# shuffle_dictionary = { i: (i, 0) for i in range(len(patch_list)) }
 
