@@ -9,7 +9,7 @@ from functions import rgb2lab, assemble_image, show_image
 import copy
 
 
-SHOW_EVERY_PLACEMENT = False
+SHOW_INCREMENTAL_PLACEMENT = True
 
 
 def predict_3rd_pixel(col1: np.ndarray, col2: np.ndarray, use_lab_color: bool) -> np.ndarray:
@@ -255,6 +255,7 @@ class PTSolver:
 							self.dissimilarity_scores[patch1_index, r1, patch2_index, r2] = score
 		else:
 			for patch1_index, patch1 in enumerate(self.patches):
+				rots = [0, 3, 2, 1] #todo, add this to rotating pieces version (or is there a better way to fix this issue?)
 				for r1 in range(4):
 					predicted_column = self.prediction_matrix[patch1_index, r1]
 					color1 = self.average_edge_colors[patch1_index, r1]
@@ -263,7 +264,7 @@ class PTSolver:
 						color2 = self.average_edge_colors[patch2_index, r2]
 						tuple_in = (patch1_index, r1, patch2_index), predicted_column, np.rot90(patch2, r1)[:, 0, :], color1, color2
 						(patch1_index, r1, patch2_index), score = norm_l1_mp(tuple_in)
-						self.dissimilarity_scores[patch1_index, r1, patch2_index] = score
+						self.dissimilarity_scores[patch1_index, rots[r1], patch2_index] = score
 
 	def get_compatibility_scores(self, best_neighbors_dissimilarity: np.ndarray):
 		for patch_index in range(self.n):
@@ -402,16 +403,16 @@ class PTSolver:
 					neighbor_row = placed_row
 					dir_a[0] = 1
 					dir_a[1] = 2
-					dir_a[2] = 0
+					dir_a[2] = 3
 					clockwise_of_next = self.reconstruction_matrix[neighbor_row + 1, neighbor_col]
 					counter_clockwise_of_next = self.reconstruction_matrix[neighbor_row - 1, neighbor_col]
 
-				elif r == ROTATION_270:  # UP
+				elif r == ROTATION_90:  # UP
 					neighbor_col = placed_col  # col
 					neighbor_row = placed_row - 1  # row
-					dir_a[0] = 3  # right
-					dir_a[1] = 1  # down
-					dir_a[2] = 2  # left
+					dir_a[0] = 2
+					dir_a[1] = 3
+					dir_a[2] = 0
 					clockwise_of_next = self.reconstruction_matrix[neighbor_row, neighbor_col + 1]  # right neighbor
 					counter_clockwise_of_next = self.reconstruction_matrix[neighbor_row, neighbor_col - 1]  # left neighbor
 
@@ -419,17 +420,17 @@ class PTSolver:
 					neighbor_col = placed_col - 1
 					neighbor_row = placed_row
 					dir_a[0] = 0
-					dir_a[1] = 3
-					dir_a[2] = 1
+					dir_a[1] = 1
+					dir_a[2] = 3
 					clockwise_of_next = self.reconstruction_matrix[neighbor_row - 1, neighbor_col]
 					counter_clockwise_of_next = self.reconstruction_matrix[neighbor_row + 1, neighbor_col]
 
-				elif r == ROTATION_90:  # DOWN
+				elif r == ROTATION_270:  # DOWN
 					neighbor_col = placed_col
 					neighbor_row = placed_row + 1
-					dir_a[0] = 2  # left
-					dir_a[1] = 0  # up
-					dir_a[2] = 3  # right
+					dir_a[0] = 0
+					dir_a[1] = 1
+					dir_a[2] = 2
 					clockwise_of_next = self.reconstruction_matrix[neighbor_row, neighbor_col - 1]
 					counter_clockwise_of_next = self.reconstruction_matrix[neighbor_row, neighbor_col + 1]
 
@@ -482,7 +483,6 @@ class PTSolver:
 				sum_mutual_compatibility = 0  # aggregates a compatibility of potential neighbors
 				num_placed_neighbors_of_next = 0  # counts how many neighbors it would have if placed
 				if neighbor_row > 0 and self.construction_matrix[neighbor_row - 1, neighbor_col] == YES_PIECE:  # if there is a piece above nextA
-					# sum_mutual_compatibility += (w1 * self.compatibility_scores[1, self.construction_matrix[neighbor_row - 1, neighbor_col] - 1][neighbor]) + (w2 * self.compatibility_scores[0, neighbor, self.construction_matrix[neighbor_row - 1, neighbor_col] - 1])
 					sum_mutual_compatibility += (w1 * self.compatibility_scores[self.reconstruction_matrix[neighbor_row - 1, neighbor_col, 0], ROTATION_270, neighbor]) \
 												+ (w2 * self.compatibility_scores[neighbor, ROTATION_90, self.reconstruction_matrix[neighbor_row - 1, neighbor_col, 0]])
 
@@ -490,19 +490,16 @@ class PTSolver:
 					num_placed_neighbors_of_next += 1
 
 				if neighbor_row < self.construction_matrix.shape[0] - 1 and self.construction_matrix[neighbor_row + 1, neighbor_col] == YES_PIECE:
-					# sum_mutual_compatibility += (w1 * self.compatibility_scores[0, self.construction_matrix[neighbor_row + 1, neighbor_col] - 1][neighbor]) + (w2 * self.compatibility_scores[1, neighbor, self.construction_matrix[neighbor_row + 1, neighbor_col] - 1])
-					sum_mutual_compatibility += (w1 * self.compatibility_scores[self.reconstruction_matrix[neighbor_row + 1, neighbor_col, 0] - 1, ROTATION_90, neighbor]) \
+					sum_mutual_compatibility += (w1 * self.compatibility_scores[self.reconstruction_matrix[neighbor_row + 1, neighbor_col, 0], ROTATION_90, neighbor]) \
 												+ (w2 * self.compatibility_scores[neighbor, ROTATION_270, self.reconstruction_matrix[neighbor_row + 1, neighbor_col, 0]])
 					num_placed_neighbors_of_next += 1
 
 				if neighbor_col > 0 and self.construction_matrix[neighbor_row, neighbor_col - 1] == YES_PIECE:
-					# sum_mutual_compatibility += (w1 * self.compatibility_scores[3, self.construction_matrix[neighbor_row, neighbor_col - 1] - 1][neighbor]) + (w2 * self.compatibility_scores[2, neighbor, self.construction_matrix[neighbor_row, neighbor_col - 1] - 1])
 					sum_mutual_compatibility += (w1 * self.compatibility_scores[self.reconstruction_matrix[neighbor_row, neighbor_col - 1, 0], ROTATION_0, neighbor]) \
 												+ (w2 * self.compatibility_scores[neighbor, ROTATION_180, self.reconstruction_matrix[neighbor_row, neighbor_col - 1, 0]])
 					num_placed_neighbors_of_next += 1
 
 				if neighbor_col < self.construction_matrix.shape[1] - 1 and self.construction_matrix[neighbor_row, neighbor_col + 1] == YES_PIECE:
-					# sum_mutual_compatibility += (w1 * self.compatibility_scores[2, self.construction_matrix[neighbor_row, neighbor_col + 1] - 1][neighbor]) + (w2 * self.compatibility_scores[3, neighbor, self.construction_matrix[neighbor_row, neighbor_col + 1] - 1])
 					sum_mutual_compatibility += (w1 * self.compatibility_scores[self.reconstruction_matrix[neighbor_row, neighbor_col + 1, 0], ROTATION_180, neighbor])\
 												+ (w2 * self.compatibility_scores[neighbor, ROTATION_0, self.reconstruction_matrix[neighbor_row, neighbor_col + 1, 0]])
 					num_placed_neighbors_of_next += 1
@@ -639,7 +636,7 @@ class PTSolver:
 			self.reconstruction_matrix[1, 1] = [first_piece, 0]  # Add the first piece, 0 refers to the rotation
 
 			# to print image as it's assembled
-			if SHOW_EVERY_PLACEMENT:
+			if SHOW_INCREMENTAL_PLACEMENT:
 				reconstructed_image = assemble_image(self.orig_patches, self.reconstruction_matrix)
 				show_image(reconstructed_image, "added a piece: " + str(counter))
 			counter += 1
@@ -662,11 +659,11 @@ class PTSolver:
 					can_add_piece = False
 					if next_piece.row > 0 and self.construction_matrix[next_piece.row - 1, next_piece.col] == YES_PIECE:
 						neighbor_up = self.reconstruction_matrix[next_piece.row - 1, next_piece.col, 0]
-						if best_neighbors[neighbor_up, ROTATION_90] == next_piece.index and best_neighbors[next_piece.index, ROTATION_270] == neighbor_up:
+						if best_neighbors[neighbor_up, ROTATION_270] == next_piece.index and best_neighbors[next_piece.index, ROTATION_90] == neighbor_up:
 							can_add_piece = True
 					if next_piece.row < self.construction_matrix.shape[0] - 1 and self.construction_matrix[next_piece.row + 1, next_piece.col] == YES_PIECE:
 						neighbor_down = self.reconstruction_matrix[next_piece.row + 1, next_piece.col, 0]
-						if best_neighbors[neighbor_down, ROTATION_270] == next_piece.index and best_neighbors[next_piece.index, ROTATION_90] == neighbor_down:
+						if best_neighbors[neighbor_down, ROTATION_90] == next_piece.index and best_neighbors[next_piece.index, ROTATION_270] == neighbor_down:
 							can_add_piece = True
 					if next_piece.col > 0 and self.construction_matrix[next_piece.row, next_piece.col - 1] == YES_PIECE:
 						neighbor_left = self.reconstruction_matrix[next_piece.row, next_piece.col - 1, 0]
@@ -688,8 +685,8 @@ class PTSolver:
 					self.patches_placed.add(next_piece.index)
 					pieces_remaining -= 1
 
-					# to print image as it's assembled
-					if SHOW_EVERY_PLACEMENT:
+					# to print image as it's assembled (change the value 16 as desired)
+					if SHOW_INCREMENTAL_PLACEMENT and (counter % 16 == 0):
 						reconstructed_image = assemble_image(self.orig_patches, self.reconstruction_matrix)
 						show_image(reconstructed_image, "added a piece: " + str(counter))
 					counter += 1
