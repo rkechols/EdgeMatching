@@ -5,11 +5,13 @@ from typing import List, Set, Tuple
 import numpy as np
 from constants import INFINITY, NO_PIECE, EXPANSION_SPACE, YES_PIECE, ROTATION_0, ROTATION_180, ROTATION_90, ROTATION_270
 from tqdm import tqdm
-from functions import rgb2lab, assemble_image, show_image
+from functions import rgb2lab, assemble_image, show_image, save_image
 import copy
 
 
-SHOW_INCREMENTAL_PLACEMENT = True
+SHOW_INCREMENTAL_PLACEMENT = False
+SAVE_INCREMENTAL_PLACEMENT = False
+SHOW_SAVE_EVERY = 16
 
 
 def predict_3rd_pixel(col1: np.ndarray, col2: np.ndarray, use_lab_color: bool) -> np.ndarray:
@@ -622,6 +624,19 @@ class PTSolver:
 				self.construction_matrix[row, col + col_shift] = EXPANSION_SPACE
 		return row, col
 
+	def save_or_show(self, counter: int):
+		if (SHOW_INCREMENTAL_PLACEMENT or SAVE_INCREMENTAL_PLACEMENT) and (counter % SHOW_SAVE_EVERY == 0):
+			reconstructed_image = assemble_image(self.orig_patches, self.reconstruction_matrix)
+			counter_str = str(counter)
+			max_digits = len(str(self.n))
+			while len(counter_str) < max_digits:
+				counter_str = "0" + counter_str
+			label = "piece" + counter_str
+			if SHOW_INCREMENTAL_PLACEMENT:
+				show_image(reconstructed_image, label)
+			if SAVE_INCREMENTAL_PLACEMENT:
+				save_image(reconstructed_image, label)
+
 	def greedy_placement_loop(self, first_piece: int, best_neighbors: np.ndarray):
 		# need to add first piece to the puzzle
 		# need to correctly make the new puzzle (the one we're going to add pieces to one piece at a time) with the right dimensions etc.
@@ -636,9 +651,7 @@ class PTSolver:
 			self.reconstruction_matrix[1, 1] = [first_piece, 0]  # Add the first piece, 0 refers to the rotation
 
 			# to print image as it's assembled
-			if SHOW_INCREMENTAL_PLACEMENT:
-				reconstructed_image = assemble_image(self.orig_patches, self.reconstruction_matrix)
-				show_image(reconstructed_image, "added a piece: " + str(counter))
+			self.save_or_show(counter)
 			counter += 1
 
 			self.block_dissimilarity_scores(1, 1, first_piece)
@@ -685,10 +698,8 @@ class PTSolver:
 					self.patches_placed.add(next_piece.index)
 					pieces_remaining -= 1
 
-					# to print image as it's assembled (change the value 16 as desired)
-					if SHOW_INCREMENTAL_PLACEMENT and (counter % 16 == 0):
-						reconstructed_image = assemble_image(self.orig_patches, self.reconstruction_matrix)
-						show_image(reconstructed_image, "added a piece: " + str(counter))
+					# to print image as it's assembled (change the mod value as desired)
+					self.save_or_show(counter)
 					counter += 1
 
 					# we already removed the piece using `heapq.heappop`

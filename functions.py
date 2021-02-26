@@ -97,6 +97,23 @@ def show_image(image_rgb: np.ndarray, label: str = None):
     plt.show()
 
 
+def save_image(image_rgb: np.ndarray, label: str = None):
+    """
+    saves an rgb image to disk
+    :param image_rgb: the image to save as a numpy array with shape (r, c, 3)
+    :param label: a label to apply to the image (used in the filename)
+    :return: None
+    """
+    plt.style.use("dark_background")
+    plt.imshow(image_rgb, vmin=0, vmax=255)
+    plt.axis("off")
+    if label is not None:
+        plt.title(label)
+    else:
+        label = "unnamed"
+    plt.savefig("out_images/" + label + ".png", bbox_inches="tight")
+
+
 def assemble_patches(patches: list, num_cols: int) -> Union[None, np.ndarray]:
     """
     takes a list of square patches and returns a tiled image of the patches with the specified number of columns
