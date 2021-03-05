@@ -99,19 +99,19 @@ def compare_images(image1: np.ndarray, image2: np.ndarray):
 
 
 if __name__ == "__main__":
-	original_image = load_image_from_disk("TestImages/a3.png")
+	original_image = load_image_from_disk("TestImages/Strange.png")
 	show_image(original_image, "original")
 	# ps = original_image.shape[0] // 6
 	ps = 28
 	rotations = False
 	original_patched, dimensions = patch_image(original_image, ps)
 
-	patch_list, shuffle_dictionary = scramble_image(original_patched, seed=8, rotation_shuffle=rotations)
+	# patch_list, shuffle_dictionary = scramble_image(original_patched, seed=8, rotation_shuffle=rotations)
 	# with open("SHUFFLE_EXPORT.txt", "w", encoding="utf-8") as shuff:
 	# 	for i in range(len(patch_list)):
 	# 		print(shuffle_dictionary[i][0], file=shuff)
-	# patch_list = original_patched  # no shuffling
-	# shuffle_dictionary = { i: (i, 0) for i in range(len(patch_list)) }
+	patch_list = original_patched  # no shuffling
+	shuffle_dictionary = { i: (i, 0) for i in range(len(patch_list)) }
 
 	show_image(assemble_patches(patch_list, original_image.shape[1] // ps), "scrambled")
 	# hypothetical_min = 85 + (15.038 * math.log(ps))
@@ -120,7 +120,7 @@ if __name__ == "__main__":
 	# reconstruction_matrix = jigsaw_kruskals(patch_list)
 	# reconstructed_image = assemble_image(patch_list, reconstruction_matrix)
 	# reconstructed_image = jigsaw_prims(patch_list)
-	reconstruction_matrix = None
+	# reconstruction_matrix = None
 	reconstruction_matrix = PTSolver(copy.deepcopy(patch_list), rotations_shuffled=rotations, use_lab_color=True).solve()
 
 	if reconstruction_matrix is not None:
@@ -128,7 +128,6 @@ if __name__ == "__main__":
 		print(f"algorithm end time: {datetime.datetime.now()}")
 		show_image(reconstructed_image, "final answer")
 		accuracy, location_accuracy, relative_accuracy = verify_accuracy(reconstruction_matrix, shuffle_dictionary, dimensions)
-		show_image(reconstructed_image, "final answer")
 		print(f"Absolute accuracy: {round(accuracy * 100, 3)}%")
 		print(f"with {round(location_accuracy * 100, 3)}% in the correct position")
 		print(f"Relative accuracy: {round(relative_accuracy * 100, 3)}%")

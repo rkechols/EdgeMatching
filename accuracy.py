@@ -118,7 +118,6 @@ def relative_accuracy(correct, reconstructed):
             row_recon, col_recon = find_index_match(index_correct, reconstructed) # find coordinates in reconstruction matrix that matches this value
             if row_recon == "not found":
                 count_not_found += 1
-                print("Piece not found count ", count_not_found)
                 continue
             rotated_reconstructed = reconstructed.copy()
             rotation_difference = (correct[i][j][1] - rotated_reconstructed[row_recon][col_recon][1]) % 4
@@ -155,6 +154,7 @@ def relative_accuracy(correct, reconstructed):
                     good_rotations[rotation_difference] += 1
                 # else:
                 #     incorrect += 1
+    print("Piece not found count ", count_not_found)
     # print("incorrect edges: " + str(incorrect))
     print("best rotation rel: " + str((4 - good_rotations.index(max(good_rotations))) % 4))
     return score / num_edges_total

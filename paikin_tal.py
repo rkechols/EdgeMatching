@@ -11,7 +11,7 @@ import copy
 
 SHOW_INCREMENTAL_PLACEMENT = False
 SAVE_INCREMENTAL_PLACEMENT = False
-SHOW_SAVE_EVERY = 16
+SHOW_SAVE_EVERY = 1
 
 
 def predict_3rd_pixel(col1: np.ndarray, col2: np.ndarray, use_lab_color: bool) -> np.ndarray:
@@ -75,45 +75,6 @@ def norm_l1_mp(coord_and_columns: (Tuple[int, int, int], np.ndarray, np.ndarray,
 		else:
 			score = norm_l1(predicted, actual)
 	return t, score
-
-
-def get_best_neighbors(scores_matrix: np.ndarray, rotations_shuffled: bool = True, for_min: bool = True) -> np.ndarray:
-	"""
-	TODO
-	:param scores_matrix:
-	:param rotations_shuffled: indicates if the patches have been rotated randomly (vs all being rotated correctly to start with)
-	:param for_min:
-	:return:
-	"""
-	n = scores_matrix.shape[0]
-	if rotations_shuffled:
-		d_type = tuple
-	else:
-		d_type = int
-	best_neighbors = np.empty((n, 4), dtype=d_type)
-	for i in range(n):
-		for r1 in range(scores_matrix.shape[1]):
-			if rotations_shuffled:
-				relevant_section = scores_matrix[i, r1, :, :]
-				if for_min:
-					best_score = np.where(relevant_section == np.amin(relevant_section))
-				else:
-					best_score = np.where(relevant_section == np.amax(relevant_section))
-				options = list(zip(*best_score))
-				if len(options) > 1:
-					print("FOUND TIE in 'get_best_neighbors'")
-				best_neighbors[i, r1] = options[0]  # just take the first if there's a tie
-			else:
-				relevant_section = scores_matrix[i, r1, :]
-				if for_min:
-					best_score = np.where(relevant_section == np.amin(relevant_section))
-				else:
-					best_score = np.where(relevant_section == np.amax(relevant_section))
-				options = best_score[0]
-				if len(options) > 1:
-					print("FOUND TIE in 'get_best_neighbors'")
-				best_neighbors[i, r1] = options[0]  # just take the first if there's a tie
-	return best_neighbors
 
 
 def calc_compatibility_score_row(dissimilarity_scores: np.ndarray, best_neighbors_dissimilarity: np.ndarray, patch_index: int, r: int, rotations_shuffled: bool = True) -> np.ndarray:
@@ -225,6 +186,7 @@ class PTSolver:
 			[EXPANSION_SPACE, YES_PIECE, EXPANSION_SPACE],
 			[NO_PIECE, EXPANSION_SPACE, NO_PIECE]
 		])
+		self.got_stuck = False
 
 	def get_3rd_pixel_predictions(self):
 		for patch_index, patch in enumerate(self.patches):
@@ -277,6 +239,44 @@ class PTSolver:
 					self.compatibility_scores[patch1_index, r1, :, :] = scores_section
 				else:
 					self.compatibility_scores[patch1_index, r1, :] = scores_section
+
+	def get_best_neighbors(self, scores_matrix: np.ndarray, for_min: bool = True) -> np.ndarray:
+		"""
+		TODO
+		:param scores_matrix:
+		:param for_min:
+		:return:
+		"""
+		n = scores_matrix.shape[0]
+		if self.rotations_shuffled:
+			d_type = tuple
+		else:
+			d_type = int
+		best_neighbors = np.empty((n, 4), dtype=d_type)
+		for i in range(n):
+			for r1 in range(scores_matrix.shape[1]):
+				if self.rotations_shuffled:
+					relevant_section = scores_matrix[i, r1, :, :]
+					if for_min:
+						best_score = np.where(relevant_section == np.amin(relevant_section))
+					else:
+						best_score = np.where(relevant_section == np.amax(relevant_section))
+					options = list(zip(*best_score))
+					# if len(options) > 1:
+					# 	print("FOUND TIE in 'get_best_neighbors'")
+					best_neighbors[i, r1] = options[0]  # just take the first if there's a tie
+				else:
+					relevant_section = scores_matrix[i, r1, :]
+					if for_min:
+						best_score = np.where(relevant_section == np.amin(relevant_section))
+					else:
+						best_score = np.where(relevant_section == np.amax(relevant_section))
+					options = best_score[0]
+					# if len(options) > 1:
+					# 	print("FOUND TIE in 'get_best_neighbors'")
+					choice = options[0]  # just take the first if there's a tie
+					best_neighbors[i, r1] = choice
+		return best_neighbors
 
 	def get_best_buddies(self):
 		# look at each piece in each rotation, see if its best neighbor is mutual
@@ -647,6 +647,7 @@ class PTSolver:
 		# continue the process until all pieces have been placed
 		counter = 0  # to print image as it's assembled
 		pieces_remaining = self.n
+		stuck_pieces_remaining = pieces_remaining
 		with tqdm(total=self.n) as progress:
 			self.reconstruction_matrix[1, 1] = [first_piece, 0]  # Add the first piece, 0 refers to the rotation
 
@@ -670,22 +671,41 @@ class PTSolver:
 						continue
 
 					can_add_piece = False
-					if next_piece.row > 0 and self.construction_matrix[next_piece.row - 1, next_piece.col] == YES_PIECE:
-						neighbor_up = self.reconstruction_matrix[next_piece.row - 1, next_piece.col, 0]
-						if best_neighbors[neighbor_up, ROTATION_270] == next_piece.index and best_neighbors[next_piece.index, ROTATION_90] == neighbor_up:
-							can_add_piece = True
-					if next_piece.row < self.construction_matrix.shape[0] - 1 and self.construction_matrix[next_piece.row + 1, next_piece.col] == YES_PIECE:
-						neighbor_down = self.reconstruction_matrix[next_piece.row + 1, next_piece.col, 0]
-						if best_neighbors[neighbor_down, ROTATION_90] == next_piece.index and best_neighbors[next_piece.index, ROTATION_270] == neighbor_down:
-							can_add_piece = True
-					if next_piece.col > 0 and self.construction_matrix[next_piece.row, next_piece.col - 1] == YES_PIECE:
-						neighbor_left = self.reconstruction_matrix[next_piece.row, next_piece.col - 1, 0]
-						if best_neighbors[neighbor_left, ROTATION_0] == next_piece.index and best_neighbors[next_piece.index, ROTATION_180] == neighbor_left:
-							can_add_piece = True
-					if next_piece.col < self.construction_matrix.shape[1] - 1 and self.construction_matrix[next_piece.row, next_piece.col + 1] == YES_PIECE:
-						neighbor_right = self.reconstruction_matrix[next_piece.row, next_piece.col + 1, 0]
-						if best_neighbors[neighbor_right, ROTATION_180] == next_piece.index and best_neighbors[next_piece.index, ROTATION_0] == neighbor_right:
-							can_add_piece = True
+					if self.got_stuck:  # don't bother with mutual-ness for best buddies; trust the already-placed piece
+						if next_piece.row > 0 and self.construction_matrix[next_piece.row - 1, next_piece.col] == YES_PIECE:
+							neighbor_up = self.reconstruction_matrix[next_piece.row - 1, next_piece.col, 0]
+							if best_neighbors[neighbor_up, ROTATION_270] == next_piece.index:
+								can_add_piece = True
+						if next_piece.row < self.construction_matrix.shape[0] - 1 and self.construction_matrix[next_piece.row + 1, next_piece.col] == YES_PIECE:
+							neighbor_down = self.reconstruction_matrix[next_piece.row + 1, next_piece.col, 0]
+							if best_neighbors[neighbor_down, ROTATION_90] == next_piece.index:
+								can_add_piece = True
+						if next_piece.col > 0 and self.construction_matrix[next_piece.row, next_piece.col - 1] == YES_PIECE:
+							neighbor_left = self.reconstruction_matrix[next_piece.row, next_piece.col - 1, 0]
+							if best_neighbors[neighbor_left, ROTATION_0] == next_piece.index:
+								can_add_piece = True
+						if next_piece.col < self.construction_matrix.shape[1] - 1 and self.construction_matrix[next_piece.row, next_piece.col + 1] == YES_PIECE:
+							neighbor_right = self.reconstruction_matrix[next_piece.row, next_piece.col + 1, 0]
+							if best_neighbors[neighbor_right, ROTATION_180] == next_piece.index:
+								can_add_piece = True
+						self.got_stuck = False
+					else:
+						if next_piece.row > 0 and self.construction_matrix[next_piece.row - 1, next_piece.col] == YES_PIECE:
+							neighbor_up = self.reconstruction_matrix[next_piece.row - 1, next_piece.col, 0]
+							if best_neighbors[neighbor_up, ROTATION_270] == next_piece.index and best_neighbors[next_piece.index, ROTATION_90] == neighbor_up:
+								can_add_piece = True
+						if next_piece.row < self.construction_matrix.shape[0] - 1 and self.construction_matrix[next_piece.row + 1, next_piece.col] == YES_PIECE:
+							neighbor_down = self.reconstruction_matrix[next_piece.row + 1, next_piece.col, 0]
+							if best_neighbors[neighbor_down, ROTATION_90] == next_piece.index and best_neighbors[next_piece.index, ROTATION_270] == neighbor_down:
+								can_add_piece = True
+						if next_piece.col > 0 and self.construction_matrix[next_piece.row, next_piece.col - 1] == YES_PIECE:
+							neighbor_left = self.reconstruction_matrix[next_piece.row, next_piece.col - 1, 0]
+							if best_neighbors[neighbor_left, ROTATION_0] == next_piece.index and best_neighbors[next_piece.index, ROTATION_180] == neighbor_left:
+								can_add_piece = True
+						if next_piece.col < self.construction_matrix.shape[1] - 1 and self.construction_matrix[next_piece.row, next_piece.col + 1] == YES_PIECE:
+							neighbor_right = self.reconstruction_matrix[next_piece.row, next_piece.col + 1, 0]
+							if best_neighbors[neighbor_right, ROTATION_180] == next_piece.index and best_neighbors[next_piece.index, ROTATION_0] == neighbor_right:
+								can_add_piece = True
 
 					if not can_add_piece:
 						# can't do this piece in this spot
@@ -710,13 +730,18 @@ class PTSolver:
 
 				else:  # preference_pool is empty
 					if prev_pieces_remaining == pieces_remaining:
-						print("COULDN'T PLACE ANY PIECES-- BREAKING")
-						break
+						print("stuck pieces remaining:", pieces_remaining)
+						if pieces_remaining == stuck_pieces_remaining:
+							print("DOUBLE STUCK-- ABORTING")
+							break
+						stuck_pieces_remaining = pieces_remaining
+						# print("COULDN'T PLACE ANY PIECES-- SETTING SPECIAL FLAG")
+						self.got_stuck = True
 					else:
 						prev_pieces_remaining = pieces_remaining
-					best_neighbors_dissimilarity = get_best_neighbors(self.dissimilarity_scores, self.rotations_shuffled)
+					best_neighbors_dissimilarity = self.get_best_neighbors(self.dissimilarity_scores)
 					self.get_compatibility_scores(best_neighbors_dissimilarity)
-					best_neighbors = get_best_neighbors(self.compatibility_scores, self.rotations_shuffled, for_min=False)
+					best_neighbors = self.get_best_neighbors(self.compatibility_scores, for_min=False)
 					# print("finding initial best buddies...")
 					# buddy_matrix = get_best_buddies(compatibility_scores, rotations_shuffled)
 					self.add_candidates(best_neighbors)
@@ -740,11 +765,11 @@ class PTSolver:
 		print("computing dissimilarity scores...")
 		self.get_dissimilarity_scores()
 		print("computing best neighbors by dissimilarity...")
-		best_neighbors_dissimilarity = get_best_neighbors(self.dissimilarity_scores, self.rotations_shuffled)
+		best_neighbors_dissimilarity = self.get_best_neighbors(self.dissimilarity_scores)
 		print("computing initial compatibility scores...")
 		self.get_compatibility_scores(best_neighbors_dissimilarity)
 		print("computing best neighbors by compatibility...")
-		best_neighbors_compatibility = get_best_neighbors(self.compatibility_scores, self.rotations_shuffled, for_min=False)
+		best_neighbors_compatibility = self.get_best_neighbors(self.compatibility_scores, for_min=False)
 		print("finding initial best buddies...")
 		self.get_best_buddies()
 		self.count_best_buddies()
