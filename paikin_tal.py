@@ -538,10 +538,10 @@ class PTSolver:
 				if self.construction_matrix[neighbor_row, neighbor_col] != YES_PIECE:  # if spot is available
 					# calculate the score if we were to place it there
 					placement_score = sum_mutual_compatibility / num_placed_neighbors_of_next
-
+					placement_score += best_neighbor_bonus * 0.3
 					if check_cycles:
 						placement_score += cycle_bonus
-						placement_score += best_neighbor_bonus * 0.2
+						placement_score += neighbor_count_bonus * 0.3
 					elif not check_mutuality:  # *does* get a bonus for having more neighbors
 						placement_score += num_placed_neighbors_of_next * 0.5
 
